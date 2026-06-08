@@ -92,6 +92,13 @@ dmypy.json
 
 # Project-specific
 data/
+data/raw/
+data/manuals/
+data/extracted/
+data/vectorstores/
+data/images/
+storage/
+chroma/
 cache/
 logs/
 *.log
