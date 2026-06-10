@@ -521,3 +521,109 @@ Before M5 MCP tools:
 - Record vector/BM25 counts and representative JSON query outputs.
 - Create a small golden retrieval set for exact error-code, screw, FRU, safety, and ambiguity cases.
 - Design MCP tools around the M4 JSON retrieval evidence rather than around raw text chunks.
+
+---
+
+## M5: ThinkPad-Specific MCP Tools
+
+- Date: 2026-06-10
+- User goal: Expose ThinkPad-specific MCP tools over M2-M4 resolver, structured extraction records, and retrieval evidence while avoiding answer generation, Agent workflows, Graph RAG traversal, and live-provider requirements by default.
+- Scope included: ThinkPad tool service layer, MCP tool wrappers, default MCP registration, synthetic service tests, MCP registration/handler tests, integration/e2e smoke updates, docs, private interview notes.
+- Scope excluded: final repair prose generation, FRU dependency-chain MCP tool, `compare_generations`, live DashScope retrieval/index validation, committed `data/`, committed `docs/INTERVIEW_NOTES.md`.
+
+### File-Level Changes
+
+| Change | Path | Implementation Fact |
+|---|---|---|
+| Added | `src/thinkpad/tool_service.py` | Added `ThinkPadToolService`, standard JSON tool response envelope, manifest fallback, lazy M3 JSONL record loading, model ambiguity guard, exact table/FRU/figure/warning lookups, citation normalization, and M4 retrieval facade wrapper. |
+| Added | `src/mcp_server/tools/thinkpad_tools.py` | Added 8 ThinkPad MCP tool definitions, JSON schemas, async handlers, JSON `CallToolResult` formatting, module-level service lazy init, and test injection hook. |
+| Modified | `src/mcp_server/protocol_handler.py` | Registered ThinkPad MCP tools in `_register_default_tools()` using the existing upstream `ProtocolHandler.register_tool()` path. |
+| Modified | `src/thinkpad/__init__.py` | Exported `ThinkPadToolService` and `ThinkPadToolServiceError`. |
+| Added | `tests/thinkpad/test_tool_service.py` | Added service tests for supported-model listing, model ambiguity, machine type resolution, error-code lookup, screw-spec non-inference, FRU procedure ambiguity guard, diagram metadata-only behavior, safety warnings, and retrieval wrapper output. |
+| Added | `tests/thinkpad/test_thinkpad_mcp_tools.py` | Added MCP registration/schema tests, handler JSON output test, invalid-params error test, and clarification response test. |
+| Modified | `tests/integration/test_mcp_server.py` | Updated tools/list assertions to include ThinkPad MCP tools. |
+| Modified | `tests/e2e/test_mcp_client.py` | Updated tools/list assertions for ThinkPad tools and changed the multi-call session test to use lightweight tools that do not require provider credentials. |
+| Modified | `docs/DEV_SPEC_THINKPAD.md` | Added M5 MCP tool contract, standard response envelope, deferred tools, behavior rules, and M6 handoff. |
+| Modified | `docs/EXPERIMENTS.md` | Added M5 service/handler tests, MCP registration/e2e smoke, lint/smoke imports, and live retrieval status records. |
+| Modified | `docs/EVAL_REPORT.md` | Added M5 MCP tool contract baseline and current non-goals for answer faithfulness and live retrieval metrics. |
+| Modified | `docs/IMPLEMENTATION_LOG.md` | Added this M5 implementation fact record. |
+| Modified locally, not committed | `docs/INTERVIEW_NOTES.md` | Added M5 interview-preparation questions; this file remains private and excluded from Git by user request. |
+
+### MCP Tools Added
+
+| Tool | M5 Behavior |
+|---|---|
+| `list_supported_models` | Returns configured manuals, models, generations, and optional machine types. |
+| `resolve_thinkpad_model` | Returns manifest-backed resolver candidates and clarification state. |
+| `query_thinkpad_service` | Wraps M4 retrieval evidence JSON; live use may require local index and `DASHSCOPE_API_KEY`. |
+| `lookup_error_code` | Searches structured table rows for exact error-code matches. |
+| `get_fru_procedure` | Requires unambiguous model and returns structured FRU procedure candidates. |
+| `get_screw_spec` | Searches structured screw/torque rows and does not infer absent values. |
+| `get_related_diagram` | Returns figure metadata and citations only; no image bytes in M5. |
+| `get_safety_warnings` | Returns cited warning records for model and optional component. |
+
+Deferred:
+
+- `get_fru_dependency_chain`: deferred to M7 Graph RAG.
+- `compare_generations`: deferred until retrieval/evaluation maturity improves.
+
+### Scripts And Commands
+
+| Script/Command | Purpose | Result |
+|---|---|---|
+| `.\.venv\Scripts\python -m pytest tests\thinkpad\test_tool_service.py tests\thinkpad\test_thinkpad_mcp_tools.py -q` | Run M5 focused service and MCP handler tests. | Passed, 13 tests. |
+| `.\.venv\Scripts\python -m pytest tests\thinkpad -q` | Run all ThinkPad tests. | Passed, 55 tests. |
+| `.\.venv\Scripts\python -m pytest tests\integration\test_mcp_server.py -q` | Confirm stdio MCP server initialization, tools/list, and integration helpers. | Passed, 6 tests; existing unknown `image` marker warnings remain. |
+| `.\.venv\Scripts\python -m pytest tests\e2e\test_mcp_client.py -q` | Confirm e2e MCP client lifecycle and multi-call session. | Passed, 7 tests after changing the multi-call scenario to lightweight tools. |
+| `.\.venv\Scripts\python -m pytest tests\unit\test_smoke_imports.py -q` | Confirm upstream smoke imports still pass. | Passed, 22 tests. |
+| `.\.venv\Scripts\ruff check src\thinkpad src\mcp_server\tools\thinkpad_tools.py tests\thinkpad scripts\thinkpad_*.py` | Lint M5 ThinkPad/MCP tool scope. | Passed. |
+| Extra e2e-inclusive `ruff check` | Check the edited e2e file as well as M5 scope. | Failed on pre-existing pyupgrade findings in `tests\e2e\test_mcp_client.py` (`typing.Dict/List/Optional`); not treated as M5 blocker. |
+| `git diff --check` | Whitespace/error check before commit. | Passed; only Git CRLF conversion warnings were printed. |
+
+### Interfaces Or Schemas
+
+M5 standard JSON response shape:
+
+```json
+{
+  "tool": "tool_name",
+  "status": "ok | clarification_required | not_found | error",
+  "clarification_needed": false,
+  "message": "",
+  "model_resolution": {},
+  "results": [],
+  "citations": [],
+  "metadata": {}
+}
+```
+
+Key service API:
+
+```python
+ThinkPadToolService.list_supported_models(include_machine_types=True)
+ThinkPadToolService.resolve_thinkpad_model(query)
+ThinkPadToolService.query_thinkpad_service(query, top_k=5, collection="thinkpad_m4")
+ThinkPadToolService.lookup_error_code(error_code, model=None, top_k=5)
+ThinkPadToolService.get_fru_procedure(model, component_or_fru, top_k=5)
+ThinkPadToolService.get_screw_spec(model, component_or_screw, top_k=5)
+ThinkPadToolService.get_related_diagram(model, component_or_fru, top_k=5, include_images=False)
+ThinkPadToolService.get_safety_warnings(model, component=None, top_k=5)
+```
+
+### Validation Notes
+
+- M5 exact lookup tools do not require live provider calls.
+- `query_thinkpad_service` can return a tool-level error JSON if a live retrieval provider is not configured; this is expected in default no-key environments.
+- The first E2E run failed in the multi-call session when `query_knowledge_hub` was used as one of several sequential calls without a DashScope key. The scenario was corrected to test protocol multi-call behavior with lightweight tools instead.
+
+### Deviations And Risks
+
+- M5 does not expose image bytes even when `include_images=true`; it records `image_bytes_returned=false`.
+- Exact lookup quality depends on M3 structured record quality.
+- `query_thinkpad_service` is only as good as the local M4 index; live retrieval metrics remain unmeasured.
+- The default manifest fallback uses `config/manuals_manifest.example.yaml` when local ignored manifest data is unavailable, so default MCP startup remains stable but may reflect planned/example metadata.
+- No natural-language repair plan is produced in M5.
+
+### Handoff
+
+Proceed to M6 evaluation/dashboard work: create a small golden tool/retrieval set, measure exact lookup and citation accuracy, run a live limited `thinkpad_m4` index when credentials are explicitly available, and only then consider answer generation or Graph RAG traversal.

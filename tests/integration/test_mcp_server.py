@@ -191,14 +191,16 @@ def test_mcp_server_tools_list_stdio() -> None:
     assert tools_response["id"] == 2
     assert "result" in tools_response
     assert "tools" in tools_response["result"]
-    # Should have at least query_knowledge_hub and list_collections tools registered
+    # Should include upstream tools and ThinkPad-specific M5 tools.
     assert isinstance(tools_response["result"]["tools"], list)
-    assert len(tools_response["result"]["tools"]) >= 2
+    assert len(tools_response["result"]["tools"]) >= 11
     
     # Verify registered tools are present
     tool_names = [t["name"] for t in tools_response["result"]["tools"]]
     assert "query_knowledge_hub" in tool_names
     assert "list_collections" in tool_names
+    assert "lookup_error_code" in tool_names
+    assert "get_safety_warnings" in tool_names
 
 
 # =============================================================================

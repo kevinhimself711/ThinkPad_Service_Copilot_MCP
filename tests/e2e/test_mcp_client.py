@@ -168,7 +168,7 @@ class TestMCPClientE2E:
 
     @pytest.mark.e2e
     def test_initialize_and_tools_list(self, mcp_server: subprocess.Popen) -> None:
-        """Server responds to initialize and tools/list with all 3 registered tools."""
+        """Server responds to initialize and tools/list with upstream and ThinkPad tools."""
         messages = [
             INIT_REQUEST,
             INITIALIZED_NOTIFICATION,
@@ -201,6 +201,8 @@ class TestMCPClientE2E:
         assert "query_knowledge_hub" in tool_names
         assert "list_collections" in tool_names
         assert "get_document_summary" in tool_names
+        assert "lookup_error_code" in tool_names
+        assert "get_safety_warnings" in tool_names
 
         # Each tool must declare a valid inputSchema
         for tool in tools:
@@ -429,6 +431,7 @@ class TestMCPClientE2E:
         assert tools_resp is not None, "Missing tools/list response"
         tool_names = {t["name"] for t in tools_resp["result"]["tools"]}
         assert "query_knowledge_hub" in tool_names
+        assert "query_thinkpad_service" in tool_names
 
         # Validate query response
         query_resp = _find(responses, 3)
@@ -484,24 +487,24 @@ class TestMCPClientE2E:
                     "arguments": {"include_stats": False},
                 },
             },
-            # Call 2: query_knowledge_hub
+            # Call 2: lightweight ThinkPad resolver
             {
                 "jsonrpc": "2.0",
                 "id": 3,
                 "method": "tools/call",
                 "params": {
-                    "name": "query_knowledge_hub",
-                    "arguments": {"query": "test query", "top_k": 2},
+                    "name": "resolve_thinkpad_model",
+                    "arguments": {"query": "21CB battery removal"},
                 },
             },
-            # Call 3: get_document_summary (expect graceful error)
+            # Call 3: lightweight ThinkPad model listing
             {
                 "jsonrpc": "2.0",
                 "id": 4,
                 "method": "tools/call",
                 "params": {
-                    "name": "get_document_summary",
-                    "arguments": {"doc_id": "does_not_exist"},
+                    "name": "list_supported_models",
+                    "arguments": {"include_machine_types": False},
                 },
             },
         ]

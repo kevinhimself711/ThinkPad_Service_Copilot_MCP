@@ -123,3 +123,52 @@ M4 proves that the project now has:
 - A retrieval facade that enforces model clarification and domain rerank guardrails.
 
 M4 does not prove final answer correctness. M5 should add MCP tool contracts only after live index validation and a small golden retrieval set are recorded.
+
+## M5 MCP Tool Contract Baseline
+
+- Date: 2026-06-10
+- Milestone: M5 ThinkPad-Specific MCP Tools
+- Evaluation type: tool contract, schema, handler, and protocol smoke
+- Not evaluated yet: final repair answer faithfulness, live embedding Hit@K/MRR, Graph RAG dependency traversal, agent tool-call trajectories
+
+### Tools Exposed
+
+M5 registers these ThinkPad-specific MCP tools:
+
+| Tool | Evaluation status |
+|---|---|
+| `list_supported_models` | Synthetic service test and MCP registration test passed |
+| `resolve_thinkpad_model` | Ambiguity and machine-type tests passed |
+| `query_thinkpad_service` | Handler contract exists; live retrieval not run by default |
+| `lookup_error_code` | Synthetic structured row lookup passed |
+| `get_fru_procedure` | Ambiguity guard and structured candidate test passed |
+| `get_screw_spec` | Structured row lookup passed; missing torque is not inferred |
+| `get_related_diagram` | Metadata-only behavior passed |
+| `get_safety_warnings` | Cited warning lookup passed |
+
+### Test Results
+
+| Command | Result |
+|---|---|
+| `.\.venv\Scripts\python -m pytest tests\thinkpad -q` | 55 passed |
+| `.\.venv\Scripts\python -m pytest tests\integration\test_mcp_server.py -q` | 6 passed, 4 existing marker warnings |
+| `.\.venv\Scripts\python -m pytest tests\e2e\test_mcp_client.py -q` | 7 passed |
+| `.\.venv\Scripts\python -m pytest tests\unit\test_smoke_imports.py -q` | 22 passed |
+| `.\.venv\Scripts\ruff check src\thinkpad src\mcp_server\tools\thinkpad_tools.py tests\thinkpad scripts\thinkpad_*.py` | Passed |
+
+### Current Metrics
+
+| Metric | Status |
+|---|---|
+| MCP tool registration | 8 ThinkPad tools registered |
+| Tool response schema | Standard JSON envelope tested |
+| Ambiguous model handling | Synthetic tests passed |
+| Exact error-code lookup | Synthetic table-row test passed |
+| Screw-spec non-inference | Synthetic table-row test passed |
+| Diagram bytes | Not returned in M5 |
+| Live retrieval quality | Not measured |
+| Answer faithfulness | Out of M5 scope |
+
+### Interpretation
+
+M5 proves that ThinkPad-specific evidence tools are callable over the existing MCP server and preserve JSON citations. It does not prove that live retrieval quality is good, nor that generated repair answers are correct. M6 should turn these tool contracts into measured retrieval/evaluation scenarios before M7 graph traversal or M8 agent workflows.

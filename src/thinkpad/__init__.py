@@ -19,6 +19,7 @@ from src.thinkpad.models import (
 from src.thinkpad.retrieval import ThinkPadRetrievalResponse, retrieve_thinkpad
 from src.thinkpad.retrieval_corpus import ThinkPadRetrievalChunk, build_retrieval_chunks
 from src.thinkpad.retrieval_index import RetrievalIndexBuildResult, build_thinkpad_retrieval_index
+from src.thinkpad.tool_service import ThinkPadToolService, ThinkPadToolServiceError
 
 __all__ = [
     "Citation",
@@ -37,6 +38,8 @@ __all__ = [
     "TableRecord",
     "ThinkPadRetrievalChunk",
     "ThinkPadRetrievalResponse",
+    "ThinkPadToolService",
+    "ThinkPadToolServiceError",
     "WarningRecord",
     "build_retrieval_chunks",
     "build_thinkpad_retrieval_index",

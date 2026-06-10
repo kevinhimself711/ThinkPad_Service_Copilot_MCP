@@ -366,3 +366,79 @@ M4 establishes retrievable, rerankable, citation-backed evidence. Before M5 MCP 
 - Run the M4 smoke queries and store outputs under ignored local evaluation artifacts.
 - Add a small golden retrieval set before exposing service tools.
 - Keep final repair answers out of scope until tool schemas, citation preservation, safety handling, and ambiguity handling are tested end to end.
+
+## 14. M5 MCP Tool Contract
+
+M5 exposes ThinkPad HMM evidence through MCP tools. It does not generate final repair prose, run agents, compare generations, or traverse the FRU dependency graph.
+
+Implementation boundaries:
+
+- Business logic lives in `src/thinkpad/tool_service.py`.
+- MCP protocol wrappers live in `src/mcp_server/tools/thinkpad_tools.py`.
+- The default MCP server registers the ThinkPad tools through `ProtocolHandler.register_tool()`.
+- Tool handlers return JSON text content in a standard response envelope.
+- Exact lookup tools use M3 structured JSONL records first and do not require live provider calls.
+- `query_thinkpad_service` uses the M4 retrieval facade and may require a local index and `DASHSCOPE_API_KEY` for live retrieval.
+
+Registered M5 tools:
+
+- `list_supported_models`
+- `resolve_thinkpad_model`
+- `query_thinkpad_service`
+- `lookup_error_code`
+- `get_fru_procedure`
+- `get_screw_spec`
+- `get_related_diagram`
+- `get_safety_warnings`
+
+Deferred tools:
+
+- `get_fru_dependency_chain`: deferred to M7 Graph RAG.
+- `compare_generations`: deferred until retrieval evaluation and model applicability are stronger.
+
+Standard tool response shape:
+
+```json
+{
+  "tool": "tool_name",
+  "status": "ok | clarification_required | not_found | error",
+  "clarification_needed": false,
+  "message": "",
+  "model_resolution": {},
+  "results": [],
+  "citations": [],
+  "metadata": {}
+}
+```
+
+Citation fields:
+
+```json
+{
+  "manual_id": "...",
+  "source_url": "...",
+  "page_start": 1,
+  "page_end": 1,
+  "section": null,
+  "section_id": null
+}
+```
+
+Behavior rules:
+
+- Procedure, screw, diagram, and safety tools require a model string.
+- Ambiguous high-risk model text returns `status=clarification_required`.
+- `lookup_error_code` can run without a model filter, but applies the filter if provided.
+- `get_related_diagram` returns metadata and citations only; M5 does not return image bytes.
+- Missing local extraction artifacts produce empty structured lookup results rather than server startup failure.
+- MCP handler errors must not expose Python tracebacks to clients.
+
+## 15. M5 Handoff To M6
+
+M5 proves that ThinkPad-specific MCP tool contracts and JSON evidence responses are callable. M6 should focus on retrieval/evaluation depth before adding agent behavior:
+
+- Build a small golden retrieval set for MCP tool scenarios.
+- Measure exact lookup, model disambiguation, citation accuracy, and safety-warning recall.
+- Run a live limited DashScope index only with `DASHSCOPE_API_KEY` set in the local shell.
+- Add dashboard or trace views for ThinkPad tool calls if useful.
+- Keep final answer generation gated until evidence quality is measured.
