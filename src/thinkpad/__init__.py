@@ -16,6 +16,9 @@ from src.thinkpad.models import (
     TableRecord,
     WarningRecord,
 )
+from src.thinkpad.retrieval import ThinkPadRetrievalResponse, retrieve_thinkpad
+from src.thinkpad.retrieval_corpus import ThinkPadRetrievalChunk, build_retrieval_chunks
+from src.thinkpad.retrieval_index import RetrievalIndexBuildResult, build_thinkpad_retrieval_index
 
 __all__ = [
     "Citation",
@@ -30,9 +33,15 @@ __all__ = [
     "ManualMetadata",
     "ModelCandidate",
     "ModelResolution",
+    "RetrievalIndexBuildResult",
     "TableRecord",
+    "ThinkPadRetrievalChunk",
+    "ThinkPadRetrievalResponse",
     "WarningRecord",
+    "build_retrieval_chunks",
+    "build_thinkpad_retrieval_index",
     "extract_manual_artifacts",
     "load_manifest",
+    "retrieve_thinkpad",
     "resolve_thinkpad_model",
 ]

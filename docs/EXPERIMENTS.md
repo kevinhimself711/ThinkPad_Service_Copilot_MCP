@@ -167,3 +167,133 @@
 - Failure notes: The first full run exceeded a 5-minute tool timeout while probing tables too broadly. `hmm_loader.py` was adjusted to call PyMuPDF `find_tables()` only on likely table pages; the full run then completed successfully.
 - Interpretation notes: M3 figure records count embedded image candidates and raster fallback metadata; it is not directly comparable to the M1 figure-candidate metric and does not imply caption quality.
 - Decision: M4 can consume M3 JSONL candidates for retrieval/rerank experiments, but exact-answer claims still require targeted quality review of representative table, figure, and FRU samples.
+
+## M4-001: DashScope Provider Mock Tests
+
+- Date: 2026-06-10
+- Hypothesis: Bailian/DashScope embedding, rerank, and LLM providers can be registered and tested without live network access or credentials.
+- Command:
+
+```powershell
+.\.venv\Scripts\python -m pytest tests\unit\test_dashscope_providers.py -q
+```
+
+- Result: Passed, 5 tests.
+- Coverage:
+  - Missing `DASHSCOPE_API_KEY` raises a clear provider error without printing a secret.
+  - Embedding provider sends `text-embedding-v4` payloads with `dimensions=1024`.
+  - LLM provider sends OpenAI-compatible chat-completion payloads for `qwen3.5-flash`.
+  - Reranker sends DashScope rerank payloads for `qwen3-rerank` and maps returned indexes back to retrieval results.
+  - Embedding, reranker, and LLM factories can create the `dashscope` providers.
+- Decision: Provider wiring is safe to commit with mocked HTTP. Live calls remain opt-in and require an environment variable.
+
+## M4-002: Retrieval Corpus Dry Run Over M3 Artifacts
+
+- Date: 2026-06-10
+- Hypothesis: M3 JSONL artifacts can be converted into citation-backed retrieval chunks without loading provider settings or credentials.
+- Command:
+
+```powershell
+.\.venv\Scripts\python scripts\thinkpad_build_retrieval_index.py --extracted-dir data\extracted\m3 --collection thinkpad_m4 --dry-run
+```
+
+- Result: Passed.
+- Output:
+
+```json
+{
+  "bm25_doc_count": 0,
+  "chunk_count": 2964,
+  "collection": "thinkpad_m4",
+  "dry_run": true,
+  "embedded_count": 0,
+  "vector_count": 0
+}
+```
+
+- Decision: M4 has enough local structured corpus surface for retrieval experiments. This result does not prove embedding quality because dry-run does not call the provider or write a vector/BM25 index.
+
+## M4-003: ThinkPad Retrieval Unit Tests
+
+- Date: 2026-06-10
+- Hypothesis: The M4 retrieval facade can enforce model clarification, wrong-manual filtering, and domain rerank priorities using synthetic fixtures.
+- Command:
+
+```powershell
+.\.venv\Scripts\python -m pytest tests\thinkpad -q
+```
+
+- Result: Passed, 42 tests.
+- M4 coverage added:
+  - Corpus builder preserves citation metadata for table chunks.
+  - Index dry-run does not require live settings or credentials.
+  - Domain rerank boosts exact machine type/manual, structured procedure records, exact error-code rows, and cited records.
+  - `X1 Carbon battery removal` returns clarification instead of a unique procedure.
+  - `X1 Carbon Gen 9 battery removal` filters wrong-generation manual results when the resolver identifies the correct manual.
+- Decision: M4 retrieval guardrails are testable before live indexing.
+
+## M4-004: Settings And Import Smoke
+
+- Date: 2026-06-10
+- Hypothesis: The repository can load DashScope-oriented settings and still pass upstream smoke imports.
+- Commands:
+
+```powershell
+.\.venv\Scripts\python -m pytest tests\unit\test_smoke_imports.py -q
+```
+
+```powershell
+@'
+from src.core.settings import load_settings
+s = load_settings('config/settings.yaml')
+print(s.llm.provider, s.llm.model)
+print(s.embedding.provider, s.embedding.model, s.embedding.dimensions)
+print(s.rerank.enabled, s.rerank.provider, s.rerank.model)
+'@ | .\.venv\Scripts\python -
+```
+
+- Result: Smoke imports passed, 22 tests.
+- Settings output:
+
+```text
+dashscope qwen3.5-flash
+dashscope text-embedding-v4 1024
+True dashscope qwen3-rerank
+```
+
+- Failure note: An initial ad hoc command incorrectly tried `Settings.load(...)`, which is not a project API. The correct entrypoint is `load_settings(...)`.
+- Decision: DashScope defaults are loadable without storing a real key in configuration.
+
+## M4-005: Lint Scope
+
+- Date: 2026-06-10
+- Hypothesis: M4-owned files can pass lint even though the upstream repository has legacy style debt outside the milestone scope.
+- Broad command attempted:
+
+```powershell
+.\.venv\Scripts\ruff check src\thinkpad src\libs tests\thinkpad tests\unit scripts\thinkpad_*.py
+```
+
+- Result: Failed on pre-existing upstream lint debt, including pyupgrade findings in `src/core/settings.py`, blank-line whitespace in legacy factory files, naming findings in `src/libs/reranker/reranker_factory.py`, and old `tests/unit` files unrelated to M4.
+- Focused M4 command:
+
+```powershell
+.\.venv\Scripts\ruff check src\libs\embedding\dashscope_embedding.py src\libs\llm\dashscope_llm.py src\libs\reranker\dashscope_reranker.py src\thinkpad\retrieval_corpus.py src\thinkpad\domain_reranker.py src\thinkpad\retrieval.py src\thinkpad\retrieval_index.py scripts\thinkpad_build_retrieval_index.py scripts\thinkpad_query_retrieval.py tests\unit\test_dashscope_providers.py tests\thinkpad\test_retrieval_corpus.py tests\thinkpad\test_domain_reranker.py tests\thinkpad\test_retrieval.py
+```
+
+- Result: Passed.
+- Decision: Do not mix M4 implementation with a broad upstream lint cleanup. Track the broad lint failure as a repository hygiene issue, not as an M4 retrieval defect.
+
+## M4-006: Live Provider And Full Index Status
+
+- Date: 2026-06-10
+- Status: Not run by default.
+- Reason: Live DashScope embedding/rerank calls require a paid API key and would create local vector/BM25 artifacts under ignored paths. M4 provider correctness is covered by mocked HTTP tests, and corpus size is covered by dry-run.
+- Pending validation command when explicitly approved:
+
+```powershell
+$env:DASHSCOPE_API_KEY = "<set in local shell only>"
+.\.venv\Scripts\python scripts\thinkpad_build_retrieval_index.py --extracted-dir data\extracted\m3 --collection thinkpad_m4 --limit 50
+```
+
+- Decision: Keep live indexing opt-in and never write secrets to repository files.

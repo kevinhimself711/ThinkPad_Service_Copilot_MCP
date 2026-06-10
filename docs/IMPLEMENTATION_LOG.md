@@ -399,3 +399,125 @@ Generated local artifacts were not committed:
 ### Handoff
 
 Proceed to M4 retrieval/rerank only after selecting representative M3 candidates for manual review. Use M3 JSONL as local candidate input, keep exact facts citation-backed, and avoid exposing procedure answers until model resolution, table priority, safety recall, and FRU prerequisite handling are wired into retrieval behavior.
+
+---
+
+## M4: ThinkPad Retrieval + DashScope Provider Wiring
+
+- Date: 2026-06-10
+- User goal: Implement M4 retrieval and rerank planning with Bailian/DashScope embedding/rerank/LLM provider wiring, while keeping MCP tools, answer generation, agents, and FRU graph traversal out of scope.
+- Scope included: DashScope providers, provider factory registration, settings fields, M3 JSONL to retrieval chunk builder, local retrieval index builder, ThinkPad retrieval facade, domain reranker, index/query CLIs, synthetic tests, docs, evaluation baseline.
+- Scope excluded: live paid embedding/rerank calls by default, final natural-language repair answers, MCP tools, dashboard changes, upstream ingestion replacement, new PDF downloads, committed vector stores, committed extracted text, committed `docs/INTERVIEW_NOTES.md`.
+
+### File-Level Changes
+
+| Change | Path | Implementation Fact |
+|---|---|---|
+| Modified | `config/settings.yaml` | Set blank-key DashScope-oriented defaults for LLM, embedding, and rerank: `qwen3.5-flash`, `text-embedding-v4` with 1024 dimensions, and `qwen3-rerank`; disabled vision captioning for M4. |
+| Modified | `src/core/settings.py` | Added optional `api_key` and `base_url` fields to `RerankSettings` and parsed them from YAML. |
+| Added | `src/libs/embedding/dashscope_embedding.py` | Added DashScope embedding provider using OpenAI-compatible `/embeddings`, `text-embedding-v4`, `dimensions=1024`, and `DASHSCOPE_API_KEY` environment variable lookup. |
+| Modified | `src/libs/embedding/embedding_factory.py` | Registered `dashscope` as a built-in embedding provider. |
+| Modified | `src/libs/embedding/__init__.py` | Exported `DashScopeEmbedding` and `DashScopeEmbeddingError`. |
+| Added | `src/libs/llm/dashscope_llm.py` | Added DashScope OpenAI-compatible chat provider for `qwen3.5-flash`; M4 only tests provider plumbing with mocked HTTP. |
+| Modified | `src/libs/llm/llm_factory.py` | Added lazy registration for the `dashscope` LLM provider. |
+| Modified | `src/libs/llm/__init__.py` | Exported `DashScopeLLM` and `DashScopeLLMError` and registered `dashscope` on import. |
+| Added | `src/libs/reranker/dashscope_reranker.py` | Added DashScope text reranker for `qwen3-rerank`, mapping returned document indexes back to upstream `RetrievalResult` objects. |
+| Modified | `src/libs/reranker/reranker_factory.py` | Added lazy registration for the `dashscope` reranker provider. |
+| Modified | `src/libs/reranker/__init__.py` | Exported `DashScopeReranker` and `DashScopeRerankerError`. |
+| Added | `src/thinkpad/retrieval_corpus.py` | Added `ThinkPadRetrievalChunk`, JSONL readers, and M3 record renderers for tables, FRU procedures, warnings, and figures. |
+| Added | `src/thinkpad/domain_reranker.py` | Added deterministic domain rerank rules for exact machine type/manual, wrong-generation penalties, exact FRU/error/screw identifiers, record-type boosts, warning/diagram/procedure intent, and citation presence. |
+| Added | `src/thinkpad/retrieval_index.py` | Added `build_thinkpad_retrieval_index()` with dry-run support, local vector-store upsert, and local BM25 index build under ignored `data/db/bm25/<collection>`. |
+| Added | `src/thinkpad/retrieval.py` | Added `retrieve_thinkpad()` facade that resolves model text first, refuses ambiguous high-risk procedure queries, runs upstream hybrid search, applies domain rerank, optionally applies provider rerank, and returns JSON citation evidence. |
+| Modified | `src/thinkpad/__init__.py` | Exported M4 retrieval, corpus, and index APIs. |
+| Added | `scripts/thinkpad_build_retrieval_index.py` | Added CLI for building or dry-running the M4 retrieval index from local M3 artifacts. |
+| Added | `scripts/thinkpad_query_retrieval.py` | Added CLI that returns JSON retrieval evidence for a free-form query without generating a repair answer. |
+| Added | `tests/unit/test_dashscope_providers.py` | Added mocked HTTP tests for DashScope embedding, rerank, LLM, missing-key behavior, and provider factory creation. |
+| Added | `tests/thinkpad/test_retrieval_corpus.py` | Added corpus-builder and index dry-run tests using synthetic JSONL under ignored local paths. |
+| Added | `tests/thinkpad/test_domain_reranker.py` | Added deterministic domain-rerank tests for manual/procedure boosts and exact error-code table boosts. |
+| Added | `tests/thinkpad/test_retrieval.py` | Added retrieval-facade tests for ambiguous high-risk clarification and wrong-generation filtering. |
+| Modified | `docs/DEV_SPEC_THINKPAD.md` | Added M4 provider, corpus, indexing, query, and M5 handoff contracts. |
+| Modified | `docs/EXPERIMENTS.md` | Added M4 provider, corpus dry-run, retrieval test, settings smoke, lint-scope, and live-provider status experiment records. |
+| Added | `docs/EVAL_REPORT.md` | Added M4 retrieval baseline with current metrics, dry-run chunk count, synthetic guardrails, and pending live evaluation plan. |
+| Modified | `docs/IMPLEMENTATION_LOG.md` | Added this M4 implementation fact record. |
+| Modified locally, not committed | `docs/INTERVIEW_NOTES.md` | Added M4 interview-preparation questions; this file remains private and excluded from Git by user request. |
+
+### Scripts And Commands
+
+| Script/Command | Purpose | Result |
+|---|---|---|
+| `.\.venv\Scripts\python -m pytest tests\unit\test_dashscope_providers.py -q` | Validate DashScope provider payloads, response parsing, factory registration, and missing-key errors with mocked HTTP. | Passed, 5 tests. |
+| `.\.venv\Scripts\python -m pytest tests\thinkpad -q` | Run all ThinkPad domain tests including M4 retrieval/corpus/rerank coverage. | Passed, 42 tests. |
+| `.\.venv\Scripts\python -m pytest tests\unit\test_smoke_imports.py -q` | Confirm upstream smoke imports still pass. | Passed, 22 tests. |
+| `.\.venv\Scripts\python scripts\thinkpad_build_retrieval_index.py --extracted-dir data\extracted\m3 --collection thinkpad_m4 --dry-run` | Convert local M3 artifacts to M4 chunks without provider settings, credentials, embedding, or vector writes. | Passed; 2964 chunks. |
+| `load_settings('config/settings.yaml')` ad hoc script | Validate DashScope-oriented settings load through the real settings entrypoint. | Passed; provider/model fields loaded as expected. |
+| `Settings.load('config/settings.yaml')` ad hoc script | Initial settings smoke attempt. | Failed because `Settings.load` is not a project API; corrected to `load_settings`. |
+| `.\.venv\Scripts\ruff check src\thinkpad src\libs tests\thinkpad tests\unit scripts\thinkpad_*.py` | Planned broad lint command. | Failed on pre-existing upstream lint debt in legacy files; recorded in `docs/EXPERIMENTS.md` M4-005. |
+| Focused M4 `ruff check` over new provider, retrieval, CLI, and test files | Validate M4-owned implementation files without broad upstream style cleanup. | Passed. |
+| `git diff --check` | Whitespace/error check before commit. | Passed; only Git CRLF conversion warnings were printed. |
+
+### Interfaces Or Schemas
+
+M4 provider interfaces:
+
+```python
+DashScopeEmbedding.embed_texts(texts: list[str]) -> list[list[float]]
+DashScopeReranker.rerank(query: str, results: list[RetrievalResult], top_k: int | None = None)
+DashScopeLLM.chat(messages: list[Message], **kwargs) -> ChatResponse
+```
+
+M4 retrieval/index APIs:
+
+```python
+build_retrieval_chunks(extracted_dir, manuals, limit=None) -> list[ThinkPadRetrievalChunk]
+build_thinkpad_retrieval_index(..., dry_run=False, force_clear=False) -> RetrievalIndexBuildResult
+rerank_thinkpad_results(query, results, model_resolution=None, top_k=None)
+retrieve_thinkpad(query, manuals, settings, collection="thinkpad_m4", top_k=5) -> ThinkPadRetrievalResponse
+```
+
+Behavior invariants:
+
+- Real DashScope credentials come only from `DASHSCOPE_API_KEY`.
+- `--dry-run` must not require provider settings or credentials.
+- Ambiguous high-risk procedure queries must return clarification instead of a unique procedure.
+- Wrong-generation/manual results are filtered or penalized when model resolution is unambiguous.
+- Structured records and citations stay in retrieval metadata.
+- M4 returns retrieval evidence JSON only; it does not generate final repair instructions.
+
+### Validation
+
+Dry-run corpus summary:
+
+| Metric | Count |
+|---|---:|
+| Retrieval chunks | 2964 |
+| Embedded chunks | 0 |
+| Vector count | 0 |
+| BM25 doc count | 0 |
+
+The zero embedding/vector/BM25 counts are expected in dry-run mode.
+
+Test summary:
+
+| Suite | Result |
+|---|---|
+| `tests\unit\test_dashscope_providers.py` | 5 passed |
+| `tests\thinkpad` | 42 passed |
+| `tests\unit\test_smoke_imports.py` | 22 passed |
+| Focused M4 ruff | Passed |
+
+### Deviations And Risks
+
+- Live provider calls and full local vector/BM25 indexing were not run by default because they require a paid API key and produce ignored local artifacts. This is intentional and recorded in `docs/EXPERIMENTS.md` M4-006.
+- The broad planned ruff command currently fails due unrelated upstream lint debt. M4-owned files pass focused ruff.
+- M4 domain rerank is deterministic and explainable, but not yet measured against a golden retrieval set.
+- M4 retrieval uses M3 extraction candidates. It inherits the M3 caveat that table alignment, figure usefulness, and FRU boundaries still need representative manual review.
+- No MCP tools or final answer generation are exposed yet, so M4 cannot be demoed as an end-user repair assistant by itself.
+
+### Handoff
+
+Before M5 MCP tools:
+
+- Run a live small index with `DASHSCOPE_API_KEY` set only in the local shell.
+- Record vector/BM25 counts and representative JSON query outputs.
+- Create a small golden retrieval set for exact error-code, screw, FRU, safety, and ambiguity cases.
+- Design MCP tools around the M4 JSON retrieval evidence rather than around raw text chunks.

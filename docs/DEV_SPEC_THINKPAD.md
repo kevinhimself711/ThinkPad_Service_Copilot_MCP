@@ -236,3 +236,133 @@ Before retrieval/reranking:
 - Check FRU section boundaries and dependency edges for high-value demo procedures.
 - Decide whether to add `pymupdf_layout`, pdfplumber/Camelot, or a manual-specific table parser for difficult tables.
 - Add retrieval-time filters that prefer exact model/machine type and cited structured rows over generic semantic chunks.
+
+## 10. M4 Retrieval And Provider Contract
+
+M4 introduces a local retrieval layer over M3 structured JSONL artifacts. It still does not expose ThinkPad MCP tools, generate repair answers, run agents, or traverse a FRU graph for final plans.
+
+Provider defaults:
+
+- Embedding provider: `dashscope`
+- Embedding model: `text-embedding-v4`
+- Embedding dimension: `1024`
+- Rerank provider: `dashscope`
+- Rerank model: `qwen3-rerank`
+- LLM provider: `dashscope`
+- LLM model: `qwen3.5-flash`
+
+Secret handling:
+
+- DashScope/Bailian API keys must be supplied only through `DASHSCOPE_API_KEY`.
+- The project must not write real provider keys to `config/settings.yaml`, `.env`, docs, tests, logs, or commits.
+- Mock provider tests must not require live network access or credentials.
+
+New provider modules:
+
+- `src/libs/embedding/dashscope_embedding.py`: OpenAI-compatible embedding call for `text-embedding-v4`.
+- `src/libs/reranker/dashscope_reranker.py`: DashScope text rerank call for `qwen3-rerank`.
+- `src/libs/llm/dashscope_llm.py`: OpenAI-compatible chat completion provider for `qwen3.5-flash`; M4 only wires the provider and smoke tests it with mocked HTTP.
+
+The settings file may name these providers and blank `api_key` fields, but real execution must resolve credentials from environment variables.
+
+## 11. M4 Retrieval Corpus Contract
+
+M4 reads ignored local M3 artifacts:
+
+- `data/extracted/m3/tables.jsonl`
+- `data/extracted/m3/figures.jsonl`
+- `data/extracted/m3/fru_procedures.jsonl`
+- `data/extracted/m3/warnings.jsonl`
+
+Each M3 record becomes one citation-backed retrieval chunk through `src/thinkpad/retrieval_corpus.py`.
+
+Required chunk metadata:
+
+- `manual_id`
+- `manual_title`
+- `record_type`
+- `models`
+- `generations`
+- `machine_types`
+- `page_start`
+- `page_end`
+- `section` or `section_id` when available
+- `source_url`
+- `collection`
+- `doc_type: thinkpad_hmm_record`
+
+Record-specific metadata:
+
+- Tables: `table_type`, `columns`, exact row values.
+- FRU procedures: `procedure_id`, `fru_id`, `fru_name`, `prerequisites`, `warnings`.
+- Warnings: `warning_level`, `component`.
+- Figures: `image_id`, `storage_uri`, `related_fru_id`, `related_component`.
+
+Chunk IDs are stable and type-prefixed:
+
+- `table::<record_id>`
+- `fru::<procedure_id>`
+- `warning::<warning_id>`
+- `figure::<image_id>`
+
+The corpus builder must not write copyrighted text to Git. It only reads and writes under ignored local data paths.
+
+## 12. M4 Indexing And Query APIs
+
+Indexing API:
+
+```python
+build_thinkpad_retrieval_index(
+    extracted_dir,
+    manuals,
+    settings=None,
+    collection="thinkpad_m4",
+    limit=None,
+    batch_size=50,
+    dry_run=False,
+    force_clear=False,
+)
+```
+
+Indexing behavior:
+
+- `--dry-run` builds chunks and reports counts without loading provider settings or requiring credentials.
+- Non-dry-run embeds chunks into the local vector store and writes a local BM25 index under ignored `data/db/bm25/<collection>`.
+- `--force-clear` clears the target vector collection before writing.
+- The indexer must not download PDFs, call LLM answer generation, or expose MCP tools.
+
+CLI:
+
+```powershell
+.\.venv\Scripts\python scripts\thinkpad_build_retrieval_index.py --extracted-dir data\extracted\m3 --collection thinkpad_m4 --dry-run
+```
+
+Query API:
+
+```python
+retrieve_thinkpad(query, manuals, settings, collection="thinkpad_m4", top_k=5)
+```
+
+Query behavior:
+
+- Always run `resolve_thinkpad_model()` first.
+- If a high-risk procedure query lacks model generation or machine type, return `clarification_needed=True` and do not return a unique procedure.
+- Prefer exact machine type, exact model generation, exact manual, exact FRU/error/screw identifiers, structured record type, and complete citations.
+- Domain rerank runs around optional provider rerank so semantic reranking cannot silently overrule critical ThinkPad constraints.
+- The response is JSON retrieval evidence, not a natural-language repair answer.
+
+Query CLI:
+
+```powershell
+.\.venv\Scripts\python scripts\thinkpad_query_retrieval.py "X1 Carbon Gen 9 battery removal" --collection thinkpad_m4 --top-k 5
+```
+
+## 13. M4 Handoff To M5
+
+M4 establishes retrievable, rerankable, citation-backed evidence. Before M5 MCP tools:
+
+- Run a live small index only after setting `DASHSCOPE_API_KEY` in the shell environment.
+- Record chunk count, embedding batch count, vector count, and BM25 document count.
+- Run the M4 smoke queries and store outputs under ignored local evaluation artifacts.
+- Add a small golden retrieval set before exposing service tools.
+- Keep final repair answers out of scope until tool schemas, citation preservation, safety handling, and ambiguity handling are tested end to end.

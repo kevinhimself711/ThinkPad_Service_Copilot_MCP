@@ -110,7 +110,12 @@ class LLMFactory:
                 "Missing required configuration: settings.llm.provider. "
                 "Please ensure 'llm.provider' is specified in settings.yaml"
             ) from e
-        
+
+        if provider_name == "dashscope" and provider_name not in cls._PROVIDERS:
+            from src.libs.llm.dashscope_llm import DashScopeLLM
+
+            cls.register_provider("dashscope", DashScopeLLM)
+
         # Look up provider class in registry
         provider_class = cls._PROVIDERS.get(provider_name)
         
