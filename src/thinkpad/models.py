@@ -21,6 +21,40 @@ def _require_list(value: list[str], field_name: str) -> None:
 
 
 @dataclass(frozen=True)
+class HMMPage:
+    """One page of a local HMM PDF with text and structural extraction signals."""
+
+    manual_id: str
+    page: int
+    text: str
+    source_url: str
+    embedded_image_count: int = 0
+    drawing_count: int = 0
+    raster_fallback_needed: bool = False
+    width: float | None = None
+    height: float | None = None
+    table_blocks: list[list[list[str]]] = field(default_factory=list)
+    image_xrefs: list[int] = field(default_factory=list)
+
+    def __post_init__(self) -> None:
+        _require_non_empty(self.manual_id, "manual_id")
+        _require_non_empty(self.source_url, "source_url")
+        if self.page < 1:
+            raise DomainModelError("page must be >= 1")
+        if self.embedded_image_count < 0:
+            raise DomainModelError("embedded_image_count must be >= 0")
+        if self.drawing_count < 0:
+            raise DomainModelError("drawing_count must be >= 0")
+        if not isinstance(self.text, str):
+            raise DomainModelError("text must be a string")
+
+    def to_dict(self) -> dict[str, Any]:
+        """Return a JSON-safe representation."""
+
+        return asdict(self)
+
+
+@dataclass(frozen=True)
 class Citation:
     """Page-level source grounding for every authoritative HMM response."""
 
@@ -247,6 +281,31 @@ class ModelResolution:
         if not self.candidates:
             return None
         return sorted(self.candidates, key=lambda candidate: candidate.confidence, reverse=True)[0]
+
+    def to_dict(self) -> dict[str, Any]:
+        """Return a JSON-safe representation."""
+
+        return asdict(self)
+
+
+@dataclass(frozen=True)
+class ExtractionResult:
+    """Structured extraction output for one local ThinkPad HMM manual."""
+
+    manual_id: str
+    page_count: int
+    tables: list[TableRecord] = field(default_factory=list)
+    figures: list[FigureRecord] = field(default_factory=list)
+    fru_procedures: list[FRUProcedure] = field(default_factory=list)
+    warnings: list[WarningRecord] = field(default_factory=list)
+    dependency_edges: list[DependencyEdge] = field(default_factory=list)
+    failures: list[str] = field(default_factory=list)
+
+    def __post_init__(self) -> None:
+        _require_non_empty(self.manual_id, "manual_id")
+        if self.page_count < 0:
+            raise DomainModelError("page_count must be >= 0")
+        _require_list(self.failures, "failures")
 
     def to_dict(self) -> dict[str, Any]:
         """Return a JSON-safe representation."""

@@ -293,3 +293,109 @@ Results:
 ### Handoff
 
 Future milestone implementations must append to both `docs/IMPLEMENTATION_LOG.md` and `docs/INTERVIEW_NOTES.md` before final delivery.
+
+---
+
+## M3: HMM-Aware Extraction Layer
+
+- Date: 2026-06-10
+- User goal: Implement the M3 extraction layer that turns local ThinkPad HMM PDFs into structured candidate records without retrieval, MCP tools, vector upsert, or new downloads.
+- Scope included: local PDF loader, table extractor, FRU extractor, figure extractor, safety extractor, extraction orchestrator, CLI, synthetic tests, docs, local full extraction validation.
+- Scope excluded: retrieval/reranking, MCP tools, upstream ingestion changes, live LLM/image captioning, vector stores, committed PDFs, committed extracted text, committed images.
+
+### File-Level Changes
+
+| Change | Path | Implementation Fact |
+|---|---|---|
+| Modified | `src/thinkpad/models.py` | Added `HMMPage` and `ExtractionResult` dataclasses with validation and `to_dict()` serialization. |
+| Added | `src/thinkpad/hmm_loader.py` | Added PyMuPDF local PDF loader, file existence checks, size/SHA256 integrity checks for downloaded/validated manuals, page text extraction, embedded image count, drawing count, raster fallback signal, image xrefs, and gated PyMuPDF table probing. |
+| Added | `src/thinkpad/table_extractor.py` | Added `extract_table_records()` to convert PyMuPDF table blocks and Markdown/text table candidates into row-preserving `TableRecord` objects with citations and parent-section hints. |
+| Added | `src/thinkpad/fru_extractor.py` | Added `extract_fru_procedures()` to identify FRU procedure sections, preserve prerequisites, emit `DependencyEdge` records, and avoid treating error-code-like rows such as `0271` as FRU headings. |
+| Added | `src/thinkpad/figure_extractor.py` | Added embedded image candidate and raster fallback candidate extraction into `FigureRecord`; image files are written only when `write_images=True`. |
+| Added | `src/thinkpad/safety.py` | Added cited `WarningRecord` extraction for DANGER, CAUTION, ESD, battery, and system-board safety signals. |
+| Added | `src/thinkpad/extraction.py` | Added `ExtractionOptions`, `extract_manual_artifacts()`, `write_jsonl()`, and `write_summary()` orchestration helpers. |
+| Modified | `src/thinkpad/__init__.py` | Exported M3 extraction options, extraction result, HMM page, and extraction entrypoint. |
+| Added | `scripts/thinkpad_extract_hmm.py` | Added local extraction CLI with `--manifest`, repeatable `--manual-id`, `--output-dir`, `--max-pages`, and `--write-images`. |
+| Added | `tests/thinkpad/test_table_extractor.py` | Added synthetic tests for table row/column preservation and Markdown table fallback. |
+| Added | `tests/thinkpad/test_fru_extractor.py` | Added synthetic tests for FRU section boundaries, prerequisite dependency edges, and error-code heading guard. |
+| Added | `tests/thinkpad/test_figure_extractor.py` | Added synthetic test for raster fallback figure metadata without writing images. |
+| Added | `tests/thinkpad/test_safety.py` | Added synthetic test for cited warning record extraction. |
+| Added | `tests/thinkpad/test_extract_cli.py` | Added CLI test that creates a tiny synthetic local PDF under ignored data paths, runs the CLI, checks summary/JSONL output, and removes the local fixture. |
+| Modified | `tests/thinkpad/test_models.py` | Added serialization coverage for `HMMPage` and `ExtractionResult`. |
+| Modified | `docs/DEV_SPEC_THINKPAD.md` | Added M3 extraction contracts, module responsibilities, CLI behavior, and M4 handoff. |
+| Modified | `docs/EXPERIMENTS.md` | Added M3 synthetic test, smoke extraction, and full 8-manual extraction experiment records. |
+| Modified locally, not committed | `docs/INTERVIEW_NOTES.md` | Added M3 interview-preparation questions; this file remains private and excluded from Git by user request. |
+
+### Scripts And Commands
+
+| Script/Command | Purpose | Result |
+|---|---|---|
+| `.\.venv\Scripts\python -m pytest tests\thinkpad -q` | Run ThinkPad synthetic unit tests. | Passed, 36 tests. |
+| `.\.venv\Scripts\python -m pytest tests\unit\test_smoke_imports.py -q` | Confirm upstream smoke imports still pass. | Passed, 22 tests. |
+| `.\.venv\Scripts\ruff check src\thinkpad tests\thinkpad scripts\thinkpad_*.py` | Lint ThinkPad modules, tests, and scripts. | Passed. |
+| `.\.venv\Scripts\python scripts\thinkpad_extract_hmm.py --manifest data\manifests\manuals_manifest.yaml --output-dir data\extracted\m3_smoke --max-pages 5` | Quick local CLI smoke over all 8 manuals. | Passed; 8 manuals, 40 pages, 0 failures. |
+| `.\.venv\Scripts\python scripts\thinkpad_extract_hmm.py --manifest data\manifests\manuals_manifest.yaml --output-dir data\extracted\m3` | Full local extraction over all 8 M1 PDFs. | Passed; 8 manuals, 877 pages, 0 failures, runtime 665.57 seconds. |
+| `git diff --check` | Whitespace/error check before commit. | To be run before M3 commit. |
+
+### Interfaces Or Schemas
+
+M3 internal Python APIs:
+
+```python
+load_hmm_pages(manual, pdf_path=None, max_pages=None) -> list[HMMPage]
+extract_table_records(manual, pages) -> list[TableRecord]
+extract_fru_procedures(manual, pages) -> tuple[list[FRUProcedure], list[DependencyEdge]]
+extract_figure_records(manual, pdf_path, pages, output_dir, write_images=False) -> list[FigureRecord]
+extract_warning_records(manual, pages) -> list[WarningRecord]
+extract_manual_artifacts(manual, options) -> ExtractionResult
+```
+
+M3 CLI output contract:
+
+- `tables.jsonl`
+- `figures.jsonl`
+- `fru_procedures.jsonl`
+- `warnings.jsonl`
+- `dependency_edges.jsonl`
+- `summary.json`
+
+All CLI outputs are local ignored artifacts under `data/extracted/`.
+
+### Validation
+
+Full local extraction summary from `data/extracted/m3/summary.json`:
+
+| Metric | Count |
+|---|---:|
+| Manuals requested | 8 |
+| Manuals succeeded | 8 |
+| Manuals failed | 0 |
+| Pages | 877 |
+| Table records | 797 |
+| Figure records | 1285 |
+| FRU procedures | 195 |
+| Dependency edges | 535 |
+| Warning records | 687 |
+
+Generated local artifacts were not committed:
+
+| Local artifact | Size |
+|---|---:|
+| `data/extracted/m3/tables.jsonl` | 580,554 bytes |
+| `data/extracted/m3/figures.jsonl` | 1,327,898 bytes |
+| `data/extracted/m3/fru_procedures.jsonl` | 193,069 bytes |
+| `data/extracted/m3/warnings.jsonl` | 500,268 bytes |
+| `data/extracted/m3/dependency_edges.jsonl` | 211,528 bytes |
+| `data/extracted/m3/summary.json` | 2,025 bytes |
+
+### Deviations And Risks
+
+- The first full local extraction exceeded a 5-minute tool timeout when PyMuPDF `find_tables()` was probed too broadly. M3 added a lightweight text gate so table probing runs only on likely table pages.
+- Full extraction is still slow at about 11 minutes locally; M4 should consider caching, per-manual incremental runs, or deeper table-parser optimization before frequent regression runs.
+- M3 records are extraction candidates, not quality-certified facts. Table row alignment, diagram usefulness, FRU section boundaries, and dependency edges still need targeted review before exact retrieval claims.
+- Figure records may represent embedded image candidates or raster fallback candidates. They are not LLM-captioned diagrams in M3.
+- No upstream ingestion, retrieval, vector store, MCP tool, or dashboard interface was changed.
+
+### Handoff
+
+Proceed to M4 retrieval/rerank only after selecting representative M3 candidates for manual review. Use M3 JSONL as local candidate input, keep exact facts citation-backed, and avoid exposing procedure answers until model resolution, table priority, safety recall, and FRU prerequisite handling are wired into retrieval behavior.

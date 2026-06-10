@@ -6,8 +6,10 @@ from src.thinkpad.models import (
     Citation,
     DependencyEdge,
     DomainModelError,
+    ExtractionResult,
     FigureRecord,
     FRUProcedure,
+    HMMPage,
     TableRecord,
     WarningRecord,
 )
@@ -74,6 +76,24 @@ def test_record_rejects_citation_manual_mismatch():
             row={"FRU": "1010", "Name": "Base cover assembly"},
             citation=citation,
         )
+
+
+def test_hmm_page_and_extraction_result_serialize():
+    page = HMMPage(
+        manual_id="thinkpad_t14_gen2_p14s_gen2_hmm",
+        page=1,
+        text="Hardware Maintenance Manual",
+        source_url="https://download.lenovo.com/pccbbs/mobiles_pdf/t14_gen2_p14s_gen2_hmm_en.pdf",
+        embedded_image_count=1,
+        drawing_count=2,
+        table_blocks=[[["Code", "Action"], ["0271", "Run setup"]]],
+    )
+    result = ExtractionResult(manual_id=page.manual_id, page_count=1)
+
+    assert page.to_dict()["table_blocks"][0][1][0] == "0271"
+    assert result.to_dict()["manual_id"] == page.manual_id
+    json.dumps(page.to_dict())
+    json.dumps(result.to_dict())
 
 
 def test_figure_warning_procedure_and_dependency_records_serialize():
