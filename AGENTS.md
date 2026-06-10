@@ -104,6 +104,8 @@ Always check:
   - `docs/DEV_SPEC_THINKPAD.md`
   - `docs/SPIKE_REPORT.md`
   - `docs/EXPERIMENTS.md`
+  - `docs/IMPLEMENTATION_LOG.md`
+  - `docs/INTERVIEW_NOTES.md` if present locally
   - `docs/EVAL_REPORT.md`
 
 If a referenced file does not exist, do not fail the task. Create it only when it is directly needed by the requested change.
@@ -295,7 +297,7 @@ docs/
   SPIKE_REPORT.md
   EXPERIMENTS.md
   EVAL_REPORT.md
-  INTERVIEW_NOTES.md
+  INTERVIEW_NOTES.md             # local/private; do not commit unless explicitly requested
 
 config/
   thinkpad.yaml
@@ -823,9 +825,13 @@ For each task, follow this workflow:
 6. Add or update tests.
 7. Run relevant tests.
 8. Update documentation.
-9. Summarize changes, tests run, and remaining risks.
+9. For any repo-state implementation, update `docs/IMPLEMENTATION_LOG.md` with detailed file-level facts.
+10. For any non-trivial milestone or feature implementation, update the local private `docs/INTERVIEW_NOTES.md` with interview questions grounded in the real work when that file is present.
+11. Summarize changes, tests run, and remaining risks.
 
 Do not create large unrelated rewrites. Do not rename existing modules or reformat the entire repository unless the task explicitly asks.
+
+Implementation documentation is more detailed than the final Codex response. The final response can stay concise, but the permanent docs must preserve enough detail for later review, interview preparation, and handoff.
 
 ---
 
@@ -840,6 +846,8 @@ A feature is done only when these are true:
 - Citations are present for grounded answers.
 - No copyrighted manuals or generated vector stores are committed.
 - The change is traceable to a project phase, spec item, or user request.
+- Non-trivial implementation facts are recorded in `docs/IMPLEMENTATION_LOG.md`.
+- Interview-relevant decisions, tradeoffs, and questions are recorded in local private `docs/INTERVIEW_NOTES.md` when that file is present.
 
 For retrieval/evaluation features, also require:
 

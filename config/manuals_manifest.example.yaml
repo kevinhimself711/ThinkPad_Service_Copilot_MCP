@@ -1,0 +1,204 @@
+manuals:
+  - manual_id: thinkpad_t14_gen2_p14s_gen2_hmm
+    title: ThinkPad P14s Gen 2, T14 Gen 2 Hardware Maintenance Manual
+    models:
+      - ThinkPad T14 Gen 2
+      - ThinkPad P14s Gen 2
+    generations:
+      - Gen 2
+    machine_types:
+      - 20W0
+      - 20W1
+    year: 2021
+    edition:
+    page_count: 133
+    source_type: lenovo_official
+    source_url: https://download.lenovo.com/pccbbs/mobiles_pdf/t14_gen2_p14s_gen2_hmm_en.pdf
+    product_page_url: https://pcsupport.lenovo.com/us/en/products/laptops-and-netbooks/thinkpad-t-series-laptops/thinkpad-t14-gen-2-type-20w0-20w1/20w1/selfrepair/removalsreplacements
+    local_pdf_path: data/manuals/t14_gen2_p14s_gen2_hmm_en.pdf
+    document_type: hmm
+    language: en
+    checksum_sha256:
+    file_size_bytes:
+    product_guids: []
+    spike_status: planned
+    notes: []
+
+  - manual_id: thinkpad_t14_gen3_p14s_gen3_hmm
+    title: ThinkPad T14 Gen 3 and P14s Gen 3 Hardware Maintenance Manual
+    models:
+      - ThinkPad T14 Gen 3
+      - ThinkPad P14s Gen 3
+    generations:
+      - Gen 3
+    machine_types:
+      - 21AH
+      - 21AJ
+    year: 2022
+    edition:
+    page_count: 102
+    source_type: lenovo_official
+    source_url: https://download.lenovo.com/pccbbs/mobiles_pdf/t14_gen3_p14s_gen3_hmm_en.pdf
+    product_page_url: https://pcsupport.lenovo.com/us/en/products/laptops-and-netbooks/thinkpad-t-series-laptops/thinkpad-t14-gen-3-type-21ah-21aj/21ah/selfrepair/removalsreplacements
+    local_pdf_path: data/manuals/t14_gen3_p14s_gen3_hmm_en.pdf
+    document_type: hmm
+    language: en
+    checksum_sha256:
+    file_size_bytes:
+    product_guids: []
+    spike_status: planned
+    notes: []
+
+  - manual_id: thinkpad_t480_hmm
+    title: ThinkPad T480 Hardware Maintenance Manual
+    models:
+      - ThinkPad T480
+    generations:
+      - T480
+    machine_types:
+      - 20L5
+      - 20L6
+    year: 2018
+    edition:
+    page_count: 114
+    source_type: lenovo_official
+    source_url: https://download.lenovo.com/pccbbs/mobiles_pdf/t480_hmm_en.pdf
+    product_page_url: https://pcsupport.lenovo.com/us/en/products/laptops-and-netbooks/thinkpad-t-series-laptops/thinkpad-t480-type-20l5-20l6/20l5/selfrepair/removalsreplacements
+    local_pdf_path: data/manuals/t480_hmm_en.pdf
+    document_type: hmm
+    language: en
+    checksum_sha256:
+    file_size_bytes:
+    product_guids: []
+    spike_status: planned
+    notes: []
+
+  - manual_id: thinkpad_t490_hmm
+    title: ThinkPad T490 Hardware Maintenance Manual
+    models:
+      - ThinkPad T490
+    generations:
+      - T490
+    machine_types:
+      - 20N2
+      - 20N3
+    year: 2019
+    edition:
+    page_count: 117
+    source_type: lenovo_official
+    source_url: https://download.lenovo.com/pccbbs/mobiles_pdf/t490_hmm_en.pdf
+    product_page_url: https://pcsupport.lenovo.com/us/en/products/laptops-and-netbooks/thinkpad-t-series-laptops/thinkpad-t490-type-20n2-20n3/20n2/selfrepair/removalsreplacements
+    local_pdf_path: data/manuals/t490_hmm_en.pdf
+    document_type: hmm
+    language: en
+    checksum_sha256:
+    file_size_bytes:
+    product_guids: []
+    spike_status: planned
+    notes: []
+
+  - manual_id: thinkpad_x1_carbon_gen9_x1_yoga_gen6_hmm
+    title: ThinkPad X1 Carbon Gen 9, X1 Yoga Gen 6 Hardware Maintenance Manual
+    models:
+      - ThinkPad X1 Carbon Gen 9
+      - ThinkPad X1 Yoga Gen 6
+    generations:
+      - Gen 9
+      - Gen 6
+    machine_types:
+      - 20XW
+      - 20XX
+    year: 2021
+    edition:
+    page_count: 99
+    source_type: lenovo_official
+    source_url: https://download.lenovo.com/pccbbs/mobiles_pdf/tp_x1_carbon_gen9_x1_yoga_gen6_hmm_en.pdf
+    product_page_url: https://pcsupport.lenovo.com/us/en/products/laptops-and-netbooks/thinkpad-x-series-laptops/thinkpad-x1-carbon-9th-gen-type-20xw-20xx/20xw/selfrepair/removalsreplacements
+    local_pdf_path: data/manuals/tp_x1_carbon_gen9_x1_yoga_gen6_hmm_en.pdf
+    document_type: hmm
+    language: en
+    checksum_sha256:
+    file_size_bytes:
+    product_guids: []
+    spike_status: planned
+    notes: []
+
+  - manual_id: thinkpad_x1_carbon_gen10_x1_yoga_gen7_hmm
+    title: ThinkPad X1 Carbon Gen 10, X1 Yoga Gen 7 Hardware Maintenance Manual
+    models:
+      - ThinkPad X1 Carbon Gen 10
+      - ThinkPad X1 Yoga Gen 7
+    generations:
+      - Gen 10
+      - Gen 7
+    machine_types:
+      - 21CB
+      - 21CC
+    year: 2022
+    edition:
+    page_count: 102
+    source_type: lenovo_official
+    source_url: https://download.lenovo.com/pccbbs/mobiles_pdf/x1_carbon_gen10_x1_yoga_gen7_hmm_en.pdf
+    product_page_url: https://pcsupport.lenovo.com/us/en/products/laptops-and-netbooks/thinkpad-x-series-laptops/thinkpad-x1-carbon-10th-gen-type-21cb-21cc/21cb/selfrepair/removalsreplacements
+    local_pdf_path: data/manuals/x1_carbon_gen10_x1_yoga_gen7_hmm_en.pdf
+    document_type: hmm
+    language: en
+    checksum_sha256:
+    file_size_bytes:
+    product_guids: []
+    spike_status: planned
+    notes: []
+
+  - manual_id: thinkpad_e14_gen2_e15_gen2_hmm
+    title: ThinkPad E14 Gen 2, E15 Gen 2 Hardware Maintenance Manual
+    models:
+      - ThinkPad E14 Gen 2
+      - ThinkPad E15 Gen 2
+    generations:
+      - Gen 2
+    machine_types:
+      - 20TA
+      - 20TB
+      - 20TD
+      - 20TE
+    year: 2020
+    edition:
+    page_count: 109
+    source_type: lenovo_official
+    source_url: https://download.lenovo.com/pccbbs/mobiles_pdf/e14_gen2_e15_gen2_hmm_en.pdf
+    product_page_url: https://pcsupport.lenovo.com/us/en/products/laptops-and-netbooks/thinkpad-edge-laptops/thinkpad-e15-gen-2-type-20td-20te/20td/selfrepair/removalsreplacements
+    local_pdf_path: data/manuals/e14_gen2_e15_gen2_hmm_en.pdf
+    document_type: hmm
+    language: en
+    checksum_sha256:
+    file_size_bytes:
+    product_guids: []
+    spike_status: planned
+    notes: []
+
+  - manual_id: thinkpad_p1_gen4_x1_extreme_gen4_hmm
+    title: ThinkPad X1 Extreme Gen 4, P1 Gen 4 Hardware Maintenance Manual
+    models:
+      - ThinkPad P1 Gen 4
+      - ThinkPad X1 Extreme Gen 4
+    generations:
+      - Gen 4
+    machine_types:
+      - 20Y3
+      - 20Y4
+      - 20Y5
+      - 20Y6
+    year: 2021
+    edition:
+    page_count: 101
+    source_type: lenovo_official
+    source_url: https://download.lenovo.com/pccbbs/mobiles_pdf/x1_extreme_gen4_p1_gen4_hmm_en.pdf
+    product_page_url: https://pcsupport.lenovo.com/us/en/products/laptops-and-netbooks/thinkpad-p-series-laptops/thinkpad-p1-gen-4-type-20y3-20y4/20y3/selfrepair/removalsreplacements
+    local_pdf_path: data/manuals/x1_extreme_gen4_p1_gen4_hmm_en.pdf
+    document_type: hmm
+    language: en
+    checksum_sha256:
+    file_size_bytes:
+    product_guids: []
+    spike_status: planned
+    notes: []

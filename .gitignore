@@ -94,9 +94,11 @@ dmypy.json
 data/
 data/raw/
 data/manuals/
+data/manifests/
 data/extracted/
 data/vectorstores/
 data/images/
+docs/INTERVIEW_NOTES.md
 storage/
 chroma/
 cache/
