@@ -23,6 +23,7 @@ class RetrievalIndexBuildResult:
     bm25_doc_count: int = 0
     vector_count: int = 0
     dry_run: bool = False
+    batch_size_used: int = 0
 
     def to_dict(self) -> dict[str, Any]:
         """Return a JSON-safe representation."""
@@ -36,7 +37,7 @@ def build_thinkpad_retrieval_index(
     settings: Settings | None = None,
     collection: str = "thinkpad_m4",
     limit: int | None = None,
-    batch_size: int = 50,
+    batch_size: int = 10,
     dry_run: bool = False,
     force_clear: bool = False,
     embedding_client: Any | None = None,
@@ -62,14 +63,15 @@ def build_thinkpad_retrieval_index(
     from src.libs.vector_store.vector_store_factory import VectorStoreFactory
 
     embedding = embedding_client or EmbeddingFactory.create(settings)
+    effective_batch_size = _effective_batch_size(batch_size, embedding)
     store = vector_store or VectorStoreFactory.create(settings, collection_name=collection)
     if force_clear and hasattr(store, "clear"):
         store.clear(collection_name=collection)
 
     embedded_count = 0
     vector_records: list[dict[str, Any]] = []
-    for start in range(0, len(core_chunks), batch_size):
-        batch = core_chunks[start : start + batch_size]
+    for start in range(0, len(core_chunks), effective_batch_size):
+        batch = core_chunks[start : start + effective_batch_size]
         vectors = embedding.embed([chunk.text for chunk in batch])
         embedded_count += len(vectors)
         for chunk, vector in zip(batch, vectors):
@@ -107,4 +109,14 @@ def build_thinkpad_retrieval_index(
         bm25_doc_count=len(term_stats),
         vector_count=vector_count,
         dry_run=False,
+        batch_size_used=effective_batch_size,
     )
+
+
+def _effective_batch_size(requested_batch_size: int, embedding: Any) -> int:
+    if requested_batch_size <= 0:
+        raise ValueError("batch_size must be positive")
+    max_batch_size = getattr(embedding, "max_batch_size", None)
+    if isinstance(max_batch_size, int) and max_batch_size > 0:
+        return min(requested_batch_size, max_batch_size)
+    return requested_batch_size

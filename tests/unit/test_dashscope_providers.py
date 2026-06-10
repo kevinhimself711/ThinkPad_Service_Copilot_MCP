@@ -4,6 +4,7 @@ from dataclasses import dataclass, field
 from typing import Any
 from unittest.mock import MagicMock, patch
 
+import httpx
 import pytest
 
 from src.libs.embedding.dashscope_embedding import DashScopeEmbedding
@@ -82,6 +83,23 @@ def test_dashscope_embedding_embed_success(monkeypatch: pytest.MonkeyPatch) -> N
     payload = post.call_args.kwargs["json"]
     assert payload["model"] == "text-embedding-v4"
     assert payload["dimensions"] == 1024
+
+
+def test_dashscope_embedding_retries_transient_request_error(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("DASHSCOPE_API_KEY", "test-key")
+    embedding = DashScopeEmbedding(_Settings(), max_retries=1, retry_backoff_seconds=0)
+
+    with patch("httpx.Client") as client_class:
+        post = client_class.return_value.__enter__.return_value.post
+        post.side_effect = [
+            httpx.ConnectError("connection reset"),
+            _mock_response({"data": [{"embedding": [0.1, 0.2]}]}),
+        ]
+
+        vectors = embedding.embed(["hello"])
+
+    assert vectors == [[0.1, 0.2]]
+    assert post.call_count == 2
 
 
 def test_dashscope_llm_chat_success(monkeypatch: pytest.MonkeyPatch) -> None:

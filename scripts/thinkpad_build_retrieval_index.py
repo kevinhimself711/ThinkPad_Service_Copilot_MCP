@@ -30,7 +30,12 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--extracted-dir", default="data/extracted/m3")
     parser.add_argument("--collection", default="thinkpad_m4")
     parser.add_argument("--limit", type=int, default=None)
-    parser.add_argument("--batch-size", type=int, default=50)
+    parser.add_argument(
+        "--batch-size",
+        type=int,
+        default=10,
+        help="Embedding batch size. DashScope text-embedding-v4 live indexing uses at most 10.",
+    )
     parser.add_argument("--dry-run", action="store_true")
     parser.add_argument("--force-clear", action="store_true")
     return parser.parse_args()

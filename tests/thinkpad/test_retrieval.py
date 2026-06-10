@@ -93,3 +93,34 @@ def test_retrieve_filters_wrong_manual_for_resolved_model() -> None:
     assert response.clarification_needed is False
     assert [item["chunk_id"] for item in response.results] == ["right"]
     assert response.results[0]["citation"]["manual_id"] == "thinkpad_x1_carbon_gen9_x1_yoga_gen6_hmm"
+
+
+def test_retrieve_returns_empty_when_resolved_model_has_only_wrong_manual_hits() -> None:
+    search = _FakeSearch(
+        [
+            RetrievalResult(
+                chunk_id="wrong",
+                score=0.99,
+                text="Battery removal for E14",
+                metadata={
+                    "manual_id": "thinkpad_e14_gen2_e15_gen2_hmm",
+                    "record_type": "figure",
+                    "page_start": 33,
+                    "source_url": "https://download.lenovo.com/e14.pdf",
+                },
+            )
+        ]
+    )
+
+    response = retrieve_thinkpad(
+        query="X1 Carbon Gen 9 battery removal",
+        manuals=_manuals(),
+        settings=_Settings(),
+        hybrid_search=search,
+        core_reranker=_DisabledReranker(),
+        top_k=5,
+    )
+
+    assert response.clarification_needed is False
+    assert response.results == []
+    assert response.domain_rerank == []

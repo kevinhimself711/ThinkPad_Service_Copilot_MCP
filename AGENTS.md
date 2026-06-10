@@ -737,6 +737,18 @@ python -m pytest tests/thinkpad/test_hmm_splitter.py
 
 Do not claim tests passed unless they were actually run. If tests cannot be run because dependencies, data, or credentials are missing, state exactly what was not run and why.
 
+### Live provider validation
+
+Live paid provider tests are allowed when they materially reduce implementation risk or validate behavior that mocks cannot cover.
+
+Rules:
+
+- Use credentials only through environment variables such as `DASHSCOPE_API_KEY`.
+- Do not write API keys to `config/`, `.env`, docs, tests, command output files, commits, or logs.
+- Prefer the smallest useful live test first, then scale only when needed.
+- Record live commands, aggregate results, failures, and follow-up decisions in `docs/EXPERIMENTS.md` and `docs/IMPLEMENTATION_LOG.md`.
+- Keep generated indexes, traces, and provider outputs under ignored local data paths.
+
 ### Test expectations
 
 Add tests for every new domain behavior:

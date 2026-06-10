@@ -159,8 +159,7 @@ def _filter_wrong_manuals(
     allowed_manual_ids = {candidate.manual_id for candidate in model_resolution.candidates}
     if not allowed_manual_ids:
         return results
-    filtered = [result for result in results if result.metadata.get("manual_id") in allowed_manual_ids]
-    return filtered or results
+    return [result for result in results if result.metadata.get("manual_id") in allowed_manual_ids]
 
 
 def _result_to_dict(result: RetrievalResult) -> dict[str, Any]:

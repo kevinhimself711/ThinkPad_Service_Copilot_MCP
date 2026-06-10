@@ -524,6 +524,90 @@ Before M5 MCP tools:
 
 ---
 
+## Live-001: DashScope Live Validation And Retrieval Hardening
+
+- Date: 2026-06-10
+- User goal: Use the provided DashScope/Bailian key for real paid provider tests rather than mocks, validate the current ThinkPad retrieval path against live services, and allow future implementation phases to use paid live tests when technically necessary.
+- Scope included: live provider smoke, small live index, full live index, live retrieval smoke, MCP query smoke, batch-size hardening, retry hardening, wrong-manual filter regression fix, docs, implementation log, private interview notes.
+- Scope excluded: committing API keys, committing local `data/` indexes, running formal Hit@K/MRR evaluation, generating final repair prose, changing M5 MCP public tool names.
+
+### File-Level Changes
+
+| Change | Path | Implementation Fact |
+|---|---|---|
+| Modified | `AGENTS.md` | Added a live-provider validation policy: paid live tests are allowed when they reduce risk, credentials must stay in environment variables, smallest useful live test first, and results must be recorded in docs. |
+| Modified | `src/libs/embedding/dashscope_embedding.py` | Added `MAX_BATCH_SIZE = 10`, exposed `max_batch_size`, and added retry handling for transient request errors and retryable 429/5xx HTTP responses. |
+| Modified | `src/thinkpad/retrieval_index.py` | Added `batch_size_used` to build summaries, changed default batch size to 10, and capped requested embedding batches by provider `max_batch_size`. |
+| Modified | `scripts/thinkpad_build_retrieval_index.py` | Changed `--batch-size` default to 10 and documented the DashScope live limit. |
+| Modified | `src/thinkpad/retrieval.py` | Fixed wrong-manual filtering so resolved model queries return empty evidence when no allowed-manual hits exist instead of falling back to wrong manuals. |
+| Modified | `tests/unit/test_dashscope_providers.py` | Added a mocked retry regression test for transient embedding request failures. |
+| Modified | `tests/thinkpad/test_retrieval_corpus.py` | Added a synthetic test proving the index builder respects a provider-level maximum batch size. |
+| Modified | `tests/thinkpad/test_retrieval.py` | Added a regression test for resolved model queries with only wrong-manual retrieval hits. |
+| Modified | `docs/DEV_SPEC_THINKPAD.md` | Documented DashScope batch-size behavior and provider batch capping in the M4 retrieval/index contract. |
+| Modified | `docs/EXPERIMENTS.md` | Added live provider, live index, retrieval smoke, and MCP smoke records with failures and decisions. |
+| Modified | `docs/EVAL_REPORT.md` | Added a live validation addendum and clarified that the run is not yet a formal retrieval-quality benchmark. |
+| Modified | `docs/IMPLEMENTATION_LOG.md` | Added this live validation implementation record. |
+| Modified locally, not committed | `docs/INTERVIEW_NOTES.md` | Added live-provider interview questions. This file remains private and excluded from Git by user request. |
+
+### Live Commands And Results
+
+| Command Shape | Purpose | Result |
+|---|---|---|
+| Python provider smoke with `DASHSCOPE_API_KEY` set in the local shell | Call live embedding, rerank, and LLM providers with minimal inputs. | Passed. Embedding returned 1024 dimensions; rerank selected the battery candidate; LLM returned a minimal response. |
+| `.\.venv\Scripts\python scripts\thinkpad_build_retrieval_index.py --extracted-dir data\extracted\m3 --collection thinkpad_m5_live_smoke --limit 50 --force-clear` | Build a small paid live index. | Failed at old default batch size 50; DashScope reported the batch must be smaller. |
+| Same small index after setting batch size 20 | Test adjusted batch size. | Failed again; the live request shape required batch size no larger than 10. |
+| Same small index after setting batch size 10 | Validate small live indexing. | Passed: 50 chunks, 50 embedded records, 50 vector records, 50 BM25 docs. |
+| Live query smoke against the small sample | Check ambiguity and model filtering. | Found a bug: resolved Gen9 query could fall back to wrong-manual results when the sample lacked allowed manual hits. |
+| `.\.venv\Scripts\python scripts\thinkpad_build_retrieval_index.py --extracted-dir data\extracted\m3 --collection thinkpad_m4 --force-clear` | Build the full paid local index. | First run failed after about 222 seconds due a transient remote connection reset. |
+| Same full index after retry hardening | Validate full live indexing. | Passed in about 416 seconds: 2964 chunks, 2964 embedded records, 2964 vector records, 2964 BM25 docs. |
+| Live retrieval smoke against `thinkpad_m4` | Validate model-aware retrieval with the full live index. | Passed. Ambiguous X1 Carbon query requested clarification; Gen9 and 21CB queries returned expected manuals after filtering fix. |
+| MCP `query_thinkpad_service` handler live smoke | Validate M5 tool wrapper over live retrieval. | Passed for `21CB battery removal`: `status=ok`, `isError=False`, 2 expected Gen10 manual results. |
+
+### Interface Or Schema Changes
+
+No MCP tool names or input schemas changed.
+
+`RetrievalIndexBuildResult` now includes:
+
+```python
+batch_size_used: int = 0
+```
+
+`DashScopeEmbedding` now exposes:
+
+```python
+max_batch_size = 10
+max_retries = 3
+retry_backoff_seconds = 1.0
+```
+
+### Test Commands And Results
+
+| Command | Result |
+|---|---|
+| `.\.venv\Scripts\python -m pytest tests\thinkpad\test_retrieval.py tests\thinkpad\test_retrieval_corpus.py -q` | Passed during focused validation. |
+| `.\.venv\Scripts\python -m pytest tests\unit\test_dashscope_providers.py -q` | Passed during focused validation. |
+| `.\.venv\Scripts\python -m pytest tests\thinkpad -q` | Passed, 57 tests. |
+| `.\.venv\Scripts\python -m pytest tests\unit\test_dashscope_providers.py -q` | Passed, 6 tests. |
+| `.\.venv\Scripts\python -m pytest tests\unit\test_smoke_imports.py -q` | Passed, 22 tests. |
+| `.\.venv\Scripts\python -m pytest tests\integration\test_mcp_server.py -q` | Passed, 6 tests; existing unknown `image` marker warnings remain. |
+| `.\.venv\Scripts\ruff check src\libs\embedding\dashscope_embedding.py src\thinkpad\retrieval.py src\thinkpad\retrieval_index.py scripts\thinkpad_build_retrieval_index.py tests\thinkpad\test_retrieval.py tests\thinkpad\test_retrieval_corpus.py tests\unit\test_dashscope_providers.py` | Passed. |
+| `.\.venv\Scripts\ruff check src\thinkpad src\mcp_server\tools\thinkpad_tools.py tests\thinkpad scripts\thinkpad_*.py` | Passed. |
+| `git diff --check` | Passed; Git printed Windows CRLF conversion warnings only. |
+
+### Risks And Follow-Up
+
+- Live provider access is now validated, but retrieval quality is still not formally measured.
+- Battery-removal queries currently surface safety warnings strongly; M6 should measure and tune record-type ranking for procedure-intent queries.
+- The full local index exists only under ignored `data/db` paths and is not portable through Git.
+- If the exposed key was used outside this local test context, the user should rotate it in the provider console; this repository only guarantees it was not written to files or committed.
+
+### Handoff
+
+M6 should use the live `thinkpad_m4` index to build a small golden evaluation set and report Hit@K, MRR, citation accuracy, model/generation accuracy, record-type accuracy, and safety-warning recall before adding answer generation or FRU graph traversal.
+
+---
+
 ## M5: ThinkPad-Specific MCP Tools
 
 - Date: 2026-06-10

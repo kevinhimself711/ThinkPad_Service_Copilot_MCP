@@ -18,6 +18,7 @@ class DashScopeEmbedding(BaseEmbedding):
     DEFAULT_BASE_URL = "https://dashscope.aliyuncs.com/compatible-mode/v1"
     DEFAULT_MODEL = "text-embedding-v4"
     DEFAULT_DIMENSIONS = 1024
+    MAX_BATCH_SIZE = 10
 
     def __init__(
         self,
@@ -35,6 +36,9 @@ class DashScopeEmbedding(BaseEmbedding):
         settings_base_url = getattr(settings.embedding, "base_url", None)
         self.base_url = (base_url or settings_base_url or self.DEFAULT_BASE_URL).rstrip("/")
         self.timeout = float(kwargs.get("timeout", 60.0))
+        self.max_retries = int(kwargs.get("max_retries", 3))
+        self.retry_backoff_seconds = float(kwargs.get("retry_backoff_seconds", 1.0))
+        self.max_batch_size = self.MAX_BATCH_SIZE
 
     def embed(
         self,
@@ -69,6 +73,8 @@ class DashScopeEmbedding(BaseEmbedding):
         return int(self.dimensions)
 
     def _post_json(self, path: str, payload: dict[str, Any]) -> dict[str, Any]:
+        import time
+
         import httpx
 
         url = f"{self.base_url}{path}"
@@ -76,17 +82,29 @@ class DashScopeEmbedding(BaseEmbedding):
             "Authorization": f"Bearer {self.api_key}",
             "Content-Type": "application/json",
         }
-        try:
-            with httpx.Client(timeout=self.timeout) as client:
-                response = client.post(url, json=payload, headers=headers)
-        except httpx.RequestError as exc:
-            raise DashScopeEmbeddingError(f"DashScope embedding request failed: {exc}") from exc
+        retry_statuses = {429, 500, 502, 503, 504}
+        for attempt in range(self.max_retries + 1):
+            try:
+                with httpx.Client(timeout=self.timeout) as client:
+                    response = client.post(url, json=payload, headers=headers)
+            except httpx.RequestError as exc:
+                if attempt < self.max_retries:
+                    time.sleep(self.retry_backoff_seconds * (2**attempt))
+                    continue
+                raise DashScopeEmbeddingError(f"DashScope embedding request failed: {exc}") from exc
 
-        if response.status_code != 200:
+            if response.status_code == 200:
+                try:
+                    return response.json()
+                except ValueError as exc:
+                    raise DashScopeEmbeddingError("DashScope embedding response is not valid JSON") from exc
+
+            if response.status_code in retry_statuses and attempt < self.max_retries:
+                time.sleep(self.retry_backoff_seconds * (2**attempt))
+                continue
+
             raise DashScopeEmbeddingError(
                 f"DashScope embedding API error (HTTP {response.status_code}): {response.text}"
             )
-        try:
-            return response.json()
-        except ValueError as exc:
-            raise DashScopeEmbeddingError("DashScope embedding response is not valid JSON") from exc
+
+        raise DashScopeEmbeddingError("DashScope embedding request failed after retries")

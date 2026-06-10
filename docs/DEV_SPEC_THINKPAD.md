@@ -318,7 +318,7 @@ build_thinkpad_retrieval_index(
     settings=None,
     collection="thinkpad_m4",
     limit=None,
-    batch_size=50,
+    batch_size=10,
     dry_run=False,
     force_clear=False,
 )
@@ -328,6 +328,8 @@ Indexing behavior:
 
 - `--dry-run` builds chunks and reports counts without loading provider settings or requiring credentials.
 - Non-dry-run embeds chunks into the local vector store and writes a local BM25 index under ignored `data/db/bm25/<collection>`.
+- The default batch size is `10` because live DashScope `text-embedding-v4` indexing rejected larger batches for M3 chunk inputs.
+- If the embedding provider exposes `max_batch_size`, the index builder caps requested batches to that value.
 - `--force-clear` clears the target vector collection before writing.
 - The indexer must not download PDFs, call LLM answer generation, or expose MCP tools.
 

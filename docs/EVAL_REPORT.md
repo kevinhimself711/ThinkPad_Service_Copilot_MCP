@@ -172,3 +172,43 @@ M5 registers these ThinkPad-specific MCP tools:
 ### Interpretation
 
 M5 proves that ThinkPad-specific evidence tools are callable over the existing MCP server and preserve JSON citations. It does not prove that live retrieval quality is good, nor that generated repair answers are correct. M6 should turn these tool contracts into measured retrieval/evaluation scenarios before M7 graph traversal or M8 agent workflows.
+
+## M5 Live DashScope Validation Addendum
+
+- Date: 2026-06-10
+- Validation type: paid live-provider smoke and full local indexing run
+- Credential handling: `DASHSCOPE_API_KEY` was supplied only through the local shell environment and was not written to repository files.
+- Collection validated: `thinkpad_m4`
+- Data source: ignored local M3 extraction artifacts under `data/extracted/m3`
+
+### Live Results
+
+| Check | Result |
+|---|---|
+| DashScope embedding smoke | Passed; `text-embedding-v4` returned a 1024-dimension vector |
+| DashScope rerank smoke | Passed; `qwen3-rerank` ranked the battery candidate first |
+| DashScope LLM smoke | Passed; `qwen3.5-flash` returned a minimal response |
+| Small live index | Passed with 50 chunks after reducing batch size to 10 |
+| Full live index | Passed with 2964 chunks, 2964 embedded records, 2964 vector records, and 2964 BM25 docs |
+| MCP `query_thinkpad_service` live smoke | Passed for `21CB battery removal`, returning expected Gen10 manual evidence |
+
+### Issues Found
+
+| Issue | Fix |
+|---|---|
+| DashScope rejected embedding batches larger than 10 for this request shape | Set DashScope embedding `max_batch_size=10`, changed the index CLI default to 10, and capped requested batch size by provider capability |
+| Full live indexing hit a transient connection reset after several minutes | Added retry handling for transient request errors and retryable 429/5xx responses |
+| Resolved model queries could fall back to wrong-manual hits when a limited index had no allowed manual records | Changed wrong-manual filtering to return empty evidence instead of falling back to wrong manuals |
+
+### Current Quality Interpretation
+
+This live run proves that M4/M5 retrieval infrastructure can call real DashScope services and build a full local index from the 8-manual M3 corpus. It is not yet a retrieval-quality benchmark.
+
+Current smoke observations:
+
+- `X1 Carbon battery removal` correctly requires clarification because generation is missing.
+- `X1 Carbon Gen 9 battery removal` and `21CB battery removal` return results from the expected manuals after the hard-filter fix.
+- Battery-removal queries currently rank safety-warning records above FRU procedure records in some cases.
+- Exact error-code and safety queries return structured evidence, but their Hit@K/MRR are still unmeasured.
+
+M6 should convert these smoke findings into a small golden evaluation set with measurable Hit@K, MRR, citation accuracy, model/generation accuracy, record-type accuracy, and safety-warning recall.

@@ -368,3 +368,129 @@ $env:DASHSCOPE_API_KEY = "<set in local shell only>"
 ```
 
 - Decision: Keep live retrieval opt-in and record outputs under ignored local artifacts.
+
+## M5-005: Live DashScope Provider Smoke
+
+- Date: 2026-06-10
+- Hypothesis: The configured DashScope providers work against the real API with the local environment variable set.
+- Credential handling: `DASHSCOPE_API_KEY` was set only in the shell process. The key was not written to repository files.
+- Command shape:
+
+```powershell
+$env:DASHSCOPE_API_KEY = "<local only>"
+.\.venv\Scripts\python - <<'PY'
+# create DashScope embedding, reranker, and LLM providers; send minimal requests
+PY
+```
+
+- Result: Passed.
+- Observed:
+  - `text-embedding-v4` returned 1 embedding with dimension 1024.
+  - `qwen3-rerank` ranked the battery candidate first for query `battery removal`.
+  - `qwen3.5-flash` returned `OK` for a one-token style smoke prompt.
+- Decision: Provider credentials, endpoints, payloads, and response parsing work in live mode.
+
+## M5-006: Live Retrieval Index Hardening
+
+- Date: 2026-06-10
+- Hypothesis: M3 artifacts can be embedded into a local live `thinkpad_m4` index with DashScope.
+- Initial command:
+
+```powershell
+$env:DASHSCOPE_API_KEY = "<local only>"
+.\.venv\Scripts\python scripts\thinkpad_build_retrieval_index.py --extracted-dir data\extracted\m3 --collection thinkpad_m5_live_smoke --limit 50 --force-clear
+```
+
+- First result: Failed. DashScope rejected the old default batch size of 50 and reported the request batch size must not exceed 20.
+- Second result after setting batch size 20: Failed. DashScope rejected this request shape and reported the request batch size must not exceed 10.
+- Fix:
+  - `DashScopeEmbedding.max_batch_size` is now 10.
+  - `scripts/thinkpad_build_retrieval_index.py` defaults to `--batch-size 10`.
+  - `build_thinkpad_retrieval_index()` caps requested batch size to provider `max_batch_size`.
+  - Added a synthetic regression test proving provider max batch size is respected.
+- Small live index after fix: Passed.
+- Small live metrics:
+
+```json
+{
+  "batch_size_used": 10,
+  "bm25_doc_count": 50,
+  "chunk_count": 50,
+  "collection": "thinkpad_m5_live_smoke",
+  "dry_run": false,
+  "embedded_count": 50,
+  "vector_count": 50
+}
+```
+
+- Full live command:
+
+```powershell
+$env:DASHSCOPE_API_KEY = "<local only>"
+.\.venv\Scripts\python scripts\thinkpad_build_retrieval_index.py --extracted-dir data\extracted\m3 --collection thinkpad_m4 --force-clear
+```
+
+- First full result: Failed after about 222 seconds with a transient remote connection reset.
+- Fix: `DashScopeEmbedding` now retries transient request errors and retryable 429/5xx responses with short exponential backoff.
+- Final full result: Passed in about 416 seconds.
+- Full live metrics:
+
+```json
+{
+  "batch_size_used": 10,
+  "bm25_doc_count": 2964,
+  "chunk_count": 2964,
+  "collection": "thinkpad_m4",
+  "dry_run": false,
+  "embedded_count": 2964,
+  "vector_count": 2964
+}
+```
+
+- Decision: Full local live index is now built under ignored `data/db` paths. M6 can use it for golden retrieval evaluation.
+
+## M5-007: Live Retrieval And MCP Query Smoke
+
+- Date: 2026-06-10
+- Hypothesis: The live `thinkpad_m4` index can support model-aware retrieval and M5 MCP tool wrapping.
+- Commands:
+
+```powershell
+$env:DASHSCOPE_API_KEY = "<local only>"
+# Call retrieve_thinkpad(...) for representative queries and summarize top metadata only.
+# Call query_thinkpad_service_handler(...) for one MCP tool smoke.
+```
+
+- Result: Passed.
+- Query observations:
+  - `X1 Carbon battery removal`: returned `clarification_needed=True`, `reason=generation_required`, 0 results.
+  - `X1 Carbon Gen 9 battery removal`: returned 3 results, all from `thinkpad_x1_carbon_gen9_x1_yoga_gen6_hmm`.
+  - `21CB battery removal`: returned 3 results, all from `thinkpad_x1_carbon_gen10_x1_yoga_gen7_hmm`.
+  - `error code 0271`: returned structured table evidence from HMM table records.
+  - `battery safety warning`: returned warning evidence records.
+  - MCP `query_thinkpad_service` for `21CB battery removal`: returned `status=ok`, `isError=False`, 2 results, both from the expected Gen10 manual.
+- Additional bug found and fixed:
+  - Before the fix, a resolved model query could return wrong-manual results if the indexed sample did not contain any allowed manual hits.
+  - `_filter_wrong_manuals()` now hard-filters resolved model results and returns empty evidence instead of falling back to wrong manuals.
+  - Added a regression test for the no-allowed-manual case.
+- Retrieval quality note:
+  - Battery-removal queries currently rank safety-warning evidence above FRU procedure evidence in some cases. This is acceptable for smoke but should become an M6 golden-set/rerank tuning item.
+- Decision: Live retrieval is functional and model-aware, but answer quality and ranking metrics still need M6 evaluation.
+
+## M5-008: Live-Fix Regression Validation
+
+- Date: 2026-06-10
+- Hypothesis: The live-discovered batch-size, retry, and wrong-manual filtering fixes remain covered by deterministic local tests.
+- Commands and results:
+
+| Command | Result |
+|---|---|
+| `.\.venv\Scripts\python -m pytest tests\thinkpad -q` | Passed, 57 tests |
+| `.\.venv\Scripts\python -m pytest tests\unit\test_dashscope_providers.py -q` | Passed, 6 tests |
+| `.\.venv\Scripts\python -m pytest tests\unit\test_smoke_imports.py -q` | Passed, 22 tests |
+| `.\.venv\Scripts\python -m pytest tests\integration\test_mcp_server.py -q` | Passed, 6 tests; existing unknown `image` marker warnings remain |
+| `.\.venv\Scripts\ruff check src\libs\embedding\dashscope_embedding.py src\thinkpad\retrieval.py src\thinkpad\retrieval_index.py scripts\thinkpad_build_retrieval_index.py tests\thinkpad\test_retrieval.py tests\thinkpad\test_retrieval_corpus.py tests\unit\test_dashscope_providers.py` | Passed |
+| `.\.venv\Scripts\ruff check src\thinkpad src\mcp_server\tools\thinkpad_tools.py tests\thinkpad scripts\thinkpad_*.py` | Passed |
+| `git diff --check` | Passed; Git printed Windows CRLF conversion warnings only |
+
+- Decision: The live fixes have deterministic regression coverage and do not require live provider calls in default test runs.
