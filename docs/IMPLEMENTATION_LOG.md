@@ -960,3 +960,69 @@ After final validation and commit, M7 can proceed to FRU dependency graph planni
 ### Handoff
 
 M8 can build a small repair-planning agent that calls resolver, exact tools, `get_fru_procedure`, `get_fru_dependency_chain`, diagrams, and safety warnings. M8 must separately evaluate generated plan faithfulness and should not treat M7 graph evidence as final prose.
+
+---
+
+## M7.1: M0-M7 Completion Audit And Live Regression
+
+- Date: 2026-06-12
+- User goal: Before starting M8, verify whether M0-M7 were truly completed, whether they met expectations, whether any gaps remain, and generate an M0-M7 report. Run a meaningful live test if needed.
+- Scope included: audit script, M0-M7 progress report, stale guide status fix, structured and live M7 evaluation, regression commands, evaluation/experiment/log documentation, private interview notes.
+- Scope excluded: M8 Agent Client, new MCP tools, new HMM downloads, full index rebuild, committed local data, committed provider outputs, committed `docs/INTERVIEW_NOTES.md`.
+
+### File-Level Changes
+
+| Change | Path | Implementation Fact |
+|---|---|---|
+| Added | `scripts/thinkpad_audit_milestones.py` | Added a local audit fact collector that records git HEAD, key evidence file existence, M3 extraction totals, M6/M7 eval summaries, and golden-set counts into ignored `data/eval/m0_m7_audit.json`. |
+| Added | `docs/M0_M7_PROGRESS_AUDIT.md` | Added the canonical M0-M7 completion audit report with verdicts, evidence, limitations, regression results, and M8 readiness decision. |
+| Modified | `docs/PROJECT_GUIDE.md` | Replaced stale M0/M1-only repository status with current M0-M7 status and added the audit report as canonical evidence. |
+| Modified | `docs/EVAL_REPORT.md` | Added M7.1 structured/live regression results and the pre-M8 audit decision. |
+| Modified | `docs/EXPERIMENTS.md` | Added M7.1 audit fact collection, structured regression, live DashScope regression, and final audit verdict experiment records. |
+| Modified | `docs/IMPLEMENTATION_LOG.md` | Added this M7.1 implementation fact record. |
+| Modified locally, not committed | `docs/INTERVIEW_NOTES.md` | Added M7.1 interview-preparation questions about milestone audit, live validation, and honest risk boundaries. |
+
+### Scripts And Commands
+
+| Script/Command | Purpose | Result |
+|---|---|---|
+| `.\.venv\Scripts\python -m pytest tests\thinkpad -q` | Initial ThinkPad regression run. | Hit Windows temp-root permission setup error before test bodies. |
+| `.\.venv\Scripts\python -m pytest tests\thinkpad -q --basetemp data\tmp\pytest` | Rerun ThinkPad tests with ignored local pytest temp directory. | Passed, 78 tests. |
+| `.\.venv\Scripts\python -m pytest tests\unit\test_smoke_imports.py -q` | Verify upstream/domain imports still smoke cleanly. | Passed, 22 tests. |
+| `.\.venv\Scripts\python -m pytest tests\e2e\test_dashboard_smoke.py -q` | Verify lightweight dashboard page still smokes. | Passed, 8 tests. |
+| `.\.venv\Scripts\ruff check src\thinkpad src\mcp_server\tools\thinkpad_tools.py tests\thinkpad scripts\thinkpad_*.py` | Lint ThinkPad code, MCP tools, tests, and scripts including the new audit script. | Passed. |
+| `.\.venv\Scripts\python scripts\thinkpad_evaluate.py --golden-set tests\fixtures\thinkpad_m7_golden_set.json --manifest data\manifests\manuals_manifest.yaml --extracted-dir data\extracted\m3 --collection thinkpad_m4 --top-k 5 --output data\eval\m7_report_structured.json` | Run M7 structured evaluation. | Passed; 32 evaluated, 4 live retrieval cases skipped, 0 failures. |
+| `.\.venv\Scripts\python scripts\thinkpad_evaluate.py --golden-set tests\fixtures\thinkpad_m7_golden_set.json --manifest data\manifests\manuals_manifest.yaml --extracted-dir data\extracted\m3 --collection thinkpad_m4 --top-k 5 --require-live-retrieval --output data\eval\m7_report_live.json` | Run M7 live DashScope retrieval evaluation using the local environment key only. | Passed; 36 evaluated, 0 skipped, 0 failures. |
+| `.\.venv\Scripts\python scripts\thinkpad_audit_milestones.py --output data\eval\m0_m7_audit.json` | Collect local M0-M7 audit facts into ignored JSON. | Passed. |
+
+### Audit Results
+
+| Milestone | Verdict | Key Evidence |
+|---|---|---|
+| M0 | `complete` | Upstream bootstrap and `docs/M0_BASELINE.md`. |
+| M1 | `complete_with_risk` | 8 official Lenovo HMMs scanned locally; extraction quality not fully human-audited. |
+| M2 | `complete` | Domain dataclasses, manifest validation, resolver, and tests. |
+| M3 | `complete_with_risk` | 8/8 local extraction succeeded with 877 pages and structured candidates. |
+| M4 | `complete_with_risk` | Retrieval corpus/index/provider path exists and live retrieval passes current golden set; broader ablation remains future work. |
+| M5 | `complete` | ThinkPad MCP evidence tools are registered and tested. |
+| M6 | `complete` | Golden evaluation and dashboard baseline exist; M6.1 closed the only M6 failure. |
+| M6.1 | `complete` | Screw normalization fix preserved the failing case and made structured/live eval clean. |
+| M7 | `complete_with_risk` | FRU graph evidence tool passes structured/live M7 eval; graph edges inherit M3 candidate-extraction risk. |
+
+### Baseline Results
+
+| Run | Evaluated | Skipped | Failed | `tool_status_accuracy` | `manual_hit_at_k` | `manual_mrr` | `citation_accuracy` | `latency_ms_p95` |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|
+| M7.1 structured | 32 | 4 | 0 | 1.0000 | 1.0000 | 0.9636 | 1.0000 | 16.00 |
+| M7.1 live | 36 | 0 | 0 | 1.0000 | 1.0000 | 0.9667 | 1.0000 | 5339.75 |
+
+### Deviations And Risks
+
+- The initial `pytest tests\thinkpad -q` run failed during pytest temp-directory setup because Windows denied access to the default temp root. Rerunning with ignored `data\tmp\pytest` passed and is the meaningful code validation result.
+- M7.1 did not rebuild the full `thinkpad_m4` index because the existing ignored local index was present and live evaluation passed.
+- M1/M3/M7 remain candidate-extraction milestones; they do not certify every extracted table row, diagram, or dependency edge as manually correct.
+- M8 must introduce separate evaluation for generated plan faithfulness and tool-call trajectory quality.
+
+### Handoff
+
+M8 can begin with a small repair-planning agent that orchestrates the existing resolver, exact lookup tools, retrieval evidence, FRU procedure lookup, dependency-chain graph tool, diagrams, and safety warnings. The first M8 deliverable should be agent trajectory evaluation, not a broad productionization push.

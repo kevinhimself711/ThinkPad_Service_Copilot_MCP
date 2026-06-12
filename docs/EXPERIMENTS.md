@@ -881,3 +881,130 @@ Commands and results:
 | Working diff secret scan for provider-key patterns | Passed |
 
 Decision: M7 is ready for milestone commit after staging only tracked implementation/docs/test files plus new graph module, M7 fixture, and graph tests; local `data/`, drafts, interviews, and private interview notes stay uncommitted.
+
+## M7.1-001: Pre-M8 Milestone Audit Fact Collection
+
+- Date: 2026-06-12
+- Hypothesis: M0-M7 completion can be audited from committed docs/code/tests plus ignored local evaluation artifacts without mutating product behavior or downloading new manuals.
+
+Command:
+
+```powershell
+.\.venv\Scripts\python scripts\thinkpad_audit_milestones.py `
+  --output data\eval\m0_m7_audit.json
+```
+
+Result: Passed and wrote ignored local audit JSON.
+
+Collected facts:
+
+| Fact | Value |
+|---|---:|
+| Branch | `thinkpad-hmm-domain` |
+| Head before M7.1 commit | `70154ea feat(thinkpad): add FRU dependency graph tool` |
+| M3 manuals succeeded | 8 |
+| M3 pages | 877 |
+| M3 tables | 797 |
+| M3 figures | 1285 |
+| M3 FRU procedures | 195 |
+| M3 dependency edges | 535 |
+| M3 warnings | 687 |
+| M6 golden cases | 30 |
+| M7 golden cases | 36 |
+
+Decision: Add `docs/M0_M7_PROGRESS_AUDIT.md` as the canonical human-readable report and keep `data/eval/m0_m7_audit.json` ignored.
+
+## M7.1-002: Structured Regression Before M8
+
+- Date: 2026-06-12
+- Hypothesis: Current M7 graph work and M6.1 remediation still pass the default structured regression suite before M8 starts.
+
+Commands and results:
+
+| Command | Result |
+|---|---|
+| `.\.venv\Scripts\python -m pytest tests\thinkpad -q` | Initial run hit `WinError 5` on the default Windows pytest temp root before test bodies. |
+| `.\.venv\Scripts\python -m pytest tests\thinkpad -q --basetemp data\tmp\pytest` | Passed, 78 tests. |
+| `.\.venv\Scripts\python -m pytest tests\unit\test_smoke_imports.py -q` | Passed, 22 tests. |
+| `.\.venv\Scripts\python -m pytest tests\e2e\test_dashboard_smoke.py -q` | Passed, 8 tests. |
+| `.\.venv\Scripts\ruff check src\thinkpad src\mcp_server\tools\thinkpad_tools.py tests\thinkpad scripts\thinkpad_*.py` | Passed. |
+
+M7 structured evaluation command:
+
+```powershell
+.\.venv\Scripts\python scripts\thinkpad_evaluate.py `
+  --golden-set tests\fixtures\thinkpad_m7_golden_set.json `
+  --manifest data\manifests\manuals_manifest.yaml `
+  --extracted-dir data\extracted\m3 `
+  --collection thinkpad_m4 `
+  --top-k 5 `
+  --output data\eval\m7_report_structured.json
+```
+
+Structured result:
+
+| Metric | Value |
+|---|---:|
+| Query count | 36 |
+| Evaluated cases | 32 |
+| Skipped live retrieval cases | 4 |
+| Failed evaluated cases | 0 |
+| `tool_status_accuracy` | 1.0000 |
+| `manual_hit_at_k` | 1.0000 |
+| `citation_accuracy` | 1.0000 |
+| `identifier_hit_at_k` | 1.0000 |
+
+Decision: Structured behavior is clean enough for M8 planning. The pytest temp-root issue is environmental; using an ignored basetemp is the local workaround.
+
+## M7.1-003: Live DashScope Regression Before M8
+
+- Date: 2026-06-12
+- Hypothesis: The current local `thinkpad_m4` index and DashScope provider path still support live retrieval cases in the M7 golden set.
+- Credential handling: `DASHSCOPE_API_KEY` was set only in the local shell process for the command and was not written to files.
+
+Command:
+
+```powershell
+.\.venv\Scripts\python scripts\thinkpad_evaluate.py `
+  --golden-set tests\fixtures\thinkpad_m7_golden_set.json `
+  --manifest data\manifests\manuals_manifest.yaml `
+  --extracted-dir data\extracted\m3 `
+  --collection thinkpad_m4 `
+  --top-k 5 `
+  --require-live-retrieval `
+  --output data\eval\m7_report_live.json
+```
+
+Result: Passed and wrote ignored local live report.
+
+Live metrics:
+
+| Metric | Value |
+|---|---:|
+| Query count | 36 |
+| Evaluated cases | 36 |
+| Skipped cases | 0 |
+| Failed cases | 0 |
+| `tool_status_accuracy` | 1.0000 |
+| `manual_hit_at_k` | 1.0000 |
+| `manual_mrr` | 0.9667 |
+| `record_type_hit_at_k` | 1.0000 |
+| `record_type_mrr` | 1.0000 |
+| `citation_accuracy` | 1.0000 |
+| `identifier_hit_at_k` | 1.0000 |
+| `latency_ms_p95` | 5339.75 |
+
+Decision: Do not rebuild the full live index in M7.1. The existing ignored local index is present and the live regression passes. A full rebuild would add provider cost without changing the pre-M8 readiness decision.
+
+## M7.1-004: M0-M7 Audit Verdict
+
+- Date: 2026-06-12
+- Hypothesis: M8 can start if M0-M7 have explicit evidence, known risks, and no unrecorded blockers.
+
+Result: `docs/M0_M7_PROGRESS_AUDIT.md` records:
+
+- M0, M2, M5, M6, and M6.1 as `complete`.
+- M1, M3, M4, and M7 as `complete_with_risk`.
+- M8 Agent Client, answer faithfulness evaluation, broader golden sets, full human extraction audit, and production packaging as deferred.
+
+Decision: M8 can proceed after the M7.1 audit docs and script are committed. The next phase must evaluate generated repair plans separately and must not treat M7 graph evidence metrics as answer-quality metrics.

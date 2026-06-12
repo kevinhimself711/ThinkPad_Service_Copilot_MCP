@@ -400,3 +400,52 @@ Graph category result:
 M7 proves that M3 dependency edges can be traversed as structured graph evidence and exposed through MCP without LLM calls or live retrieval. The graph tool returns cited prerequisite chains, missing-node metadata, and cycle flags; it does not produce final technician instructions.
 
 M8 can now use `get_fru_dependency_chain` as one evidence tool inside a repair-planning agent, but generated plan faithfulness still needs separate evaluation.
+
+## M7.1 M0-M7 Audit And Live Regression
+
+- Date: 2026-06-12
+- Scope: pre-M8 audit gate for M0-M7 completion evidence
+- Report: `docs/M0_M7_PROGRESS_AUDIT.md`
+- Local audit JSON: ignored `data/eval/m0_m7_audit.json`
+- Live provider: DashScope via local `DASHSCOPE_API_KEY` environment variable only
+- Out of scope: M8 Agent Client, new HMM downloads, full index rebuild, answer generation
+
+### Regression Results
+
+| Check | Result |
+|---|---|
+| ThinkPad tests | Passed, 78 tests, after rerunning with ignored pytest basetemp because the default Windows temp root returned a permission error |
+| Smoke imports | Passed, 22 tests |
+| Dashboard smoke | Passed, 8 tests |
+| Ruff scoped check | Passed |
+| M7 structured eval | Passed, 32 evaluated, 4 live retrieval cases skipped, 0 failed |
+| M7 live eval | Passed, 36 evaluated, 0 skipped, 0 failed |
+
+### M7 Live Evaluation Metrics
+
+| Metric | Value |
+|---|---:|
+| Query count | 36 |
+| Evaluated cases | 36 |
+| Skipped cases | 0 |
+| Failed cases | 0 |
+| `tool_status_accuracy` | 1.0000 |
+| `manual_hit_at_k` | 1.0000 |
+| `manual_mrr` | 0.9667 |
+| `record_type_hit_at_k` | 1.0000 |
+| `record_type_mrr` | 1.0000 |
+| `citation_coverage` | 1.0000 |
+| `citation_accuracy` | 1.0000 |
+| `identifier_hit_at_k` | 1.0000 |
+| `empty_unexpected_result_rate` | 0.0000 |
+| `latency_ms_p95` | 5339.75 |
+
+### Audit Decision
+
+M0-M7 meet their intended milestone goals, but the audit keeps three boundaries explicit:
+
+- M1/M3/M7 produce structured candidates and graph evidence, not fully human-audited HMM truth.
+- M4/M6/M7 metrics cover the current curated golden sets, not a final 80-100 case benchmark.
+- M5/M7 return evidence JSON; generated repair-plan quality belongs to M8 and must be evaluated separately.
+
+Decision: M8 can proceed after committing the M7.1 audit artifacts.

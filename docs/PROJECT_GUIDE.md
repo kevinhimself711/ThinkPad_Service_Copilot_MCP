@@ -82,7 +82,23 @@ Do not rewrite the generic MCP server, vector store layer, dashboard, provider a
 
 ## 3. Current Repository Reality
 
-The repository has completed M0 and M1 bootstrap/spike work.
+The repository has completed M0-M7 and is ready to plan M8 Agent Client work.
+
+Current milestone status:
+
+| Milestone | Status | Notes |
+|---|---|---|
+| M0 | Complete | Upstream baseline and branch bootstrap are recorded. |
+| M1 | Complete with risk | 8 official Lenovo HMMs were downloaded and scanned locally; extraction quality was not fully human-audited. |
+| M2 | Complete | Domain dataclasses, manifest validation, and model resolver are implemented. |
+| M3 | Complete with risk | Local HMM-aware extraction produces structured candidates, not gold facts. |
+| M4 | Complete with risk | DashScope providers, retrieval corpus, index CLI, and retrieval facade exist; broader retrieval eval remains future work. |
+| M5 | Complete | ThinkPad-specific MCP evidence tools are registered and tested. |
+| M6 | Complete | Golden evaluation baseline and lightweight dashboard view are implemented. |
+| M6.1 | Complete | Screw-spec normalization regression was fixed and re-evaluated. |
+| M7 | Complete with risk | FRU dependency graph traversal is exposed as MCP evidence; graph edges still inherit M3 extraction-candidate risk. |
+
+Canonical audit report: `docs/M0_M7_PROGRESS_AUDIT.md`.
 
 Canonical paths:
 
@@ -95,15 +111,20 @@ src/thinkpad/                             ThinkPad domain modules
 tests/thinkpad/                           domain tests using synthetic fixtures
 ```
 
-M1 scripts currently present:
+ThinkPad local-data and milestone scripts currently present:
 
 ```text
 scripts/thinkpad_discover_manuals.py
 scripts/thinkpad_download_manuals.py
 scripts/thinkpad_spike_inspect.py
+scripts/thinkpad_extract_hmm.py
+scripts/thinkpad_build_retrieval_index.py
+scripts/thinkpad_query_retrieval.py
+scripts/thinkpad_evaluate.py
+scripts/thinkpad_audit_milestones.py
 ```
 
-M1 did not add public MCP tools, retrieval behavior, vector-store ingestion, or generated repair answers.
+Current MCP tools expose structured evidence, not final generated repair answers. M8 must add and evaluate the agent workflow separately.
 
 ---
 
