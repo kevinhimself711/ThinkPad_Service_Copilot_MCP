@@ -653,3 +653,140 @@ Commands and results:
 | `git diff --check` | Passed; Git printed Windows CRLF conversion warnings only |
 
 Decision: M6 is ready for milestone commit after staging only tracked implementation/docs/test files and excluding local `data/`, drafts, interviews, and private interview notes.
+
+## M6.1-001: Push M6 Commit
+
+- Date: 2026-06-12
+- Hypothesis: Network access is restored and the local M6 milestone commit can be synchronized before applying the remediation fix.
+
+Command:
+
+```powershell
+git push origin thinkpad-hmm-domain
+git status -sb
+git log --oneline --decorate -3
+```
+
+Result: Passed. Remote `origin/thinkpad-hmm-domain` now contains `1597bef test(thinkpad): add M6 evaluation baseline`.
+
+Decision: M6.1 can be committed as a separate remediation commit on top of M6 instead of mixing the M6 baseline and the fix.
+
+## M6.1-002: Screw-Spec Normalization Unit Coverage
+
+- Date: 2026-06-12
+- Hypothesis: Screw-size exact lookup should treat common multiplication forms as equivalent without weakening error-code exact matching.
+
+Code behavior tested:
+
+- `M2 x 3` matches extracted `M2 × 3 mm`.
+- `M2*3` matches extracted `M2 × 3 mm`.
+- `M2x3 mm` matches extracted `M2 × 3 mm`.
+- `0271` still matches as an exact error code.
+- `271` does not match embedded inside `0271`.
+
+Command:
+
+```powershell
+.\.venv\Scripts\python -m pytest tests\thinkpad\test_tool_service.py tests\thinkpad\test_evaluation.py -q
+.\.venv\Scripts\ruff check src\thinkpad\tool_service.py tests\thinkpad\test_tool_service.py
+```
+
+Result: Passed; 19 tests and focused lint passed.
+
+Decision: Keep screw-size normalization in the generic structured lookup helper while leaving exact-code matching isolated.
+
+## M6.1-003: Structured Golden Set Regression
+
+- Date: 2026-06-12
+- Hypothesis: Re-running the same M6 golden set after normalization should remove the single screw-spec failure without changing the fixture.
+
+Command:
+
+```powershell
+.\.venv\Scripts\python scripts\thinkpad_evaluate.py `
+  --golden-set tests\fixtures\thinkpad_m6_golden_set.json `
+  --manifest data\manifests\manuals_manifest.yaml `
+  --extracted-dir data\extracted\m3 `
+  --collection thinkpad_m4 `
+  --top-k 5 `
+  --output data\eval\m6_report_structured.json
+```
+
+Result: Passed and wrote an ignored local report.
+
+Structured metrics:
+
+| Metric | Value |
+|---|---:|
+| Query count | 30 |
+| Evaluated cases | 26 |
+| Skipped live retrieval cases | 4 |
+| Failed evaluated cases | 0 |
+| `tool_status_accuracy` | 1.0000 |
+| `manual_hit_at_k` | 1.0000 |
+| `manual_mrr` | 0.9556 |
+| `record_type_hit_at_k` | 1.0000 |
+| `citation_accuracy` | 1.0000 |
+| `identifier_hit_at_k` | 1.0000 |
+
+Decision: The M6 failure was a lookup-normalization issue, not a bad golden expectation.
+
+## M6.1-004: Live Golden Set Regression
+
+- Date: 2026-06-12
+- Hypothesis: The same remediation should also close the live M6 evaluation failure while keeping live retrieval cases measured.
+- Credential handling: `DASHSCOPE_API_KEY` was supplied only through the shell process and was not written to files.
+
+Command:
+
+```powershell
+$env:DASHSCOPE_API_KEY = "<local only>"
+.\.venv\Scripts\python scripts\thinkpad_evaluate.py `
+  --golden-set tests\fixtures\thinkpad_m6_golden_set.json `
+  --manifest data\manifests\manuals_manifest.yaml `
+  --extracted-dir data\extracted\m3 `
+  --collection thinkpad_m4 `
+  --top-k 5 `
+  --require-live-retrieval `
+  --output data\eval\m6_report.json
+```
+
+Result: Passed and wrote an ignored local report.
+
+Live metrics:
+
+| Metric | Value |
+|---|---:|
+| Query count | 30 |
+| Evaluated cases | 30 |
+| Skipped cases | 0 |
+| Failed cases | 0 |
+| Passed case rate | 1.0000 |
+| `tool_status_accuracy` | 1.0000 |
+| `manual_hit_at_k` | 1.0000 |
+| `manual_mrr` | 0.9600 |
+| `record_type_hit_at_k` | 1.0000 |
+| `citation_accuracy` | 1.0000 |
+| `identifier_hit_at_k` | 1.0000 |
+| `latency_ms_p95` | 6268.05 |
+
+Decision: M6.1 produces a clean live M6 regression result. The latency p95 remains provider/runtime-sensitive and is recorded separately from retrieval quality.
+
+## M6.1-005: Final Local Validation
+
+- Date: 2026-06-12
+- Hypothesis: The remediation preserves the broader ThinkPad, upstream smoke, dashboard, lint, and whitespace checks.
+- Note: pytest commands set `TEMP` and `TMP` to `.pytest_tmp` because the default Windows pytest temp root returned `WinError 5` earlier in this project session.
+
+Commands and results:
+
+| Command | Result |
+|---|---|
+| `.\.venv\Scripts\python -m pytest tests\thinkpad -q` | Passed, 68 tests |
+| `.\.venv\Scripts\python -m pytest tests\unit\test_smoke_imports.py -q` | Passed, 22 tests |
+| `.\.venv\Scripts\python -m pytest tests\e2e\test_dashboard_smoke.py -q` | Passed, 8 tests |
+| `.\.venv\Scripts\ruff check src\thinkpad scripts\thinkpad_*.py tests\thinkpad src\observability\dashboard\pages\thinkpad_evaluation.py tests\e2e\test_dashboard_smoke.py` | Passed |
+| `git diff --check` | Passed; Git printed Windows CRLF conversion warnings only |
+| Working diff secret scan for provider-key patterns | Passed |
+
+Decision: M6.1 is ready for a remediation commit after staging only tracked implementation/docs/test files and excluding local `data/`, drafts, interviews, and private interview notes.

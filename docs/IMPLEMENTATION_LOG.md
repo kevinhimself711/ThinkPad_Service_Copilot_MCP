@@ -833,3 +833,59 @@ This is a real M6 finding and should be fixed as a follow-up rather than hidden 
 - The dashboard page is intentionally read-only and does not replace CLI evaluation.
 - M6 exposes one exact lookup normalization gap; a targeted follow-up should normalize screw specs before M7 Graph RAG.
 - M7 should only proceed after deciding whether to fix the screw normalization gap first or carry it as a known evaluation baseline failure.
+
+---
+
+## M6.1: Sync M6 Commit + Screw-Spec Normalization Fix
+
+- Date: 2026-06-12
+- User goal: Push the already-created M6 commit, then fix the M6 screw-spec normalization failure and re-run the same structured and live golden-set evaluations.
+- Scope included: pushed M6 to remote, patched structured lookup normalization, added regression tests, re-ran structured and live M6 evaluations, updated evaluation/experiment/implementation docs, updated private interview notes locally.
+- Scope excluded: MCP schema changes, new golden cases, new HMM downloads, Graph RAG, answer generation, committed `data/eval/` reports, committed provider outputs, committed `docs/INTERVIEW_NOTES.md`.
+
+### File-Level Changes
+
+| Change | Path | Implementation Fact |
+|---|---|---|
+| Modified | `src/thinkpad/tool_service.py` | Added `_normalize_lookup_text()` and routed `_contains_text()` through normalized record/query strings. The helper normalizes multiplication sign and `*` to `x`, collapses screw-size spacing such as `M2 x 3` into `m2x3`, and preserves the separate exact-code path. |
+| Modified | `tests/thinkpad/test_tool_service.py` | Updated the synthetic screw row to use `M2 × 3 mm`, added coverage for `M2 x 3`, `M2*3`, and `M2x3 mm`, and added a regression assertion that `271` does not match exact error code `0271`. |
+| Modified | `docs/EVAL_REPORT.md` | Added M6.1 before/after metrics for structured and live runs. |
+| Modified | `docs/EXPERIMENTS.md` | Added M6.1 push, unit, structured regression, and live regression experiment records. |
+| Modified | `docs/IMPLEMENTATION_LOG.md` | Added this M6.1 implementation fact record. |
+| Modified locally, not committed | `docs/INTERVIEW_NOTES.md` | Added M6.1 interview-preparation questions about evaluation remediation and exact lookup normalization. |
+
+### Scripts And Commands
+
+| Script/Command | Purpose | Result |
+|---|---|---|
+| `git push origin thinkpad-hmm-domain` | Sync the existing M6 commit to remote before starting M6.1. | Passed; remote advanced to `1597bef test(thinkpad): add M6 evaluation baseline`. |
+| `.\.venv\Scripts\python -m pytest tests\thinkpad\test_tool_service.py tests\thinkpad\test_evaluation.py -q` | Focused regression tests for tool service normalization and evaluator behavior. | Passed, 19 tests. |
+| `.\.venv\Scripts\ruff check src\thinkpad\tool_service.py tests\thinkpad\test_tool_service.py` | Focused lint for the changed code/tests. | Passed. |
+| `.\.venv\Scripts\python scripts\thinkpad_evaluate.py --golden-set tests\fixtures\thinkpad_m6_golden_set.json --manifest data\manifests\manuals_manifest.yaml --extracted-dir data\extracted\m3 --collection thinkpad_m4 --top-k 5 --output data\eval\m6_report_structured.json` | Re-run structured M6 golden set without live retrieval. | Passed; 26 evaluated, 4 live retrieval cases skipped, 0 failures. |
+| `.\.venv\Scripts\python scripts\thinkpad_evaluate.py --golden-set tests\fixtures\thinkpad_m6_golden_set.json --manifest data\manifests\manuals_manifest.yaml --extracted-dir data\extracted\m3 --collection thinkpad_m4 --top-k 5 --require-live-retrieval --output data\eval\m6_report.json` | Re-run full M6 golden set with live DashScope retrieval. | Passed; 30 evaluated, 0 skipped, 0 failures. |
+| `.\.venv\Scripts\python -m pytest tests\thinkpad -q` | Run all ThinkPad tests after the remediation. | Passed, 68 tests. |
+| `.\.venv\Scripts\python -m pytest tests\unit\test_smoke_imports.py -q` | Run upstream smoke imports. | Passed, 22 tests. |
+| `.\.venv\Scripts\python -m pytest tests\e2e\test_dashboard_smoke.py -q` | Run dashboard smoke tests. | Passed, 8 tests. |
+| `.\.venv\Scripts\ruff check src\thinkpad scripts\thinkpad_*.py tests\thinkpad src\observability\dashboard\pages\thinkpad_evaluation.py tests\e2e\test_dashboard_smoke.py` | Lint the M6.1 scope and existing dashboard smoke scope. | Passed. |
+| `git diff --check` | Check whitespace before staging. | Passed; Git printed Windows CRLF conversion warnings only. |
+| Working diff secret scan for provider-key patterns | Ensure no provider key was written to tracked diff. | Passed. |
+
+### Before And After Evidence
+
+| Run | Evaluated | Skipped | Failed | `tool_status_accuracy` | `manual_hit_at_k` | `citation_accuracy` |
+|---|---:|---:|---:|---:|---:|---:|
+| M6 structured baseline | 26 | 4 | 1 | 0.9615 | 0.9444 | 0.9231 |
+| M6 live baseline | 30 | 0 | 1 | 0.9667 | 0.9500 | 0.9375 |
+| M6.1 structured after fix | 26 | 4 | 0 | 1.0000 | 1.0000 | 1.0000 |
+| M6.1 live after fix | 30 | 0 | 0 | 1.0000 | 1.0000 | 1.0000 |
+
+### Deviations And Risks
+
+- The M6 golden set was intentionally not modified; this keeps the before/after comparison honest.
+- Normalization is currently targeted at text lookup terms and common screw-size forms. It does not attempt a full units parser.
+- Live retrieval p95 latency increased in this run to `6268.05 ms`; this is recorded as runtime/provider variation and does not change the retrieval-quality interpretation.
+- Local reports under `data/eval/` remain ignored and are not committed.
+
+### Handoff
+
+After final validation and commit, M7 can proceed to FRU dependency graph planning. Keep M6/M6.1 golden evaluation as a regression suite before and after graph traversal changes.

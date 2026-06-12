@@ -570,8 +570,17 @@ def _contains_exact_code(text: str, code: str) -> bool:
 
 
 def _contains_text(text: str, query: str) -> bool:
-    terms = [term for term in re.split(r"\s+", query.lower().strip()) if term]
-    return all(term in text for term in terms)
+    normalized_text = _normalize_lookup_text(text)
+    terms = [term for term in re.split(r"\s+", _normalize_lookup_text(query)) if term]
+    return all(term in normalized_text for term in terms)
+
+
+def _normalize_lookup_text(value: str) -> str:
+    normalized = value.lower()
+    normalized = normalized.replace("×", "x").replace("*", "x")
+    normalized = re.sub(r"\bm\s*([0-9]+(?:\.[0-9]+)?)\s*x\s*([0-9]+(?:\.[0-9]+)?)\b", r"m\1x\2", normalized)
+    normalized = re.sub(r"\s+", " ", normalized).strip()
+    return normalized
 
 
 def _screw_rank(record: dict[str, Any]) -> tuple[int, str]:

@@ -305,3 +305,38 @@ Failed case:
 ### Interpretation
 
 M6 proves that ThinkPad evidence tools are measurable with a domain-specific golden set and that live retrieval can be evaluated without answer generation. It also exposes a concrete normalization gap for exact screw-size lookup. The next retrieval-quality work should fix screw-spec normalization and then re-run the same M6 golden set to show before/after movement.
+
+## M6.1 Screw-Spec Normalization Remediation
+
+- Date: 2026-06-12
+- Scope: targeted M6.1 remediation before M7 Graph RAG
+- Golden set: unchanged `tests/fixtures/thinkpad_m6_golden_set.json`
+- Code path fixed: structured exact lookup in `ThinkPadToolService.get_screw_spec()`
+- Out of scope: MCP schema changes, new golden cases, answer generation, FRU graph traversal
+
+### Fix Summary
+
+M6 exposed one real failure: `m6_screw_t480_exact_size` queried `M2 x 3`, while extracted PDF text represented the same screw size with the multiplication sign. M6.1 keeps the golden case unchanged and normalizes lookup text so equivalent screw-size expressions match:
+
+- `M2 x 3`
+- `M2 X 3`
+- `M2*3`
+- `M2x3`
+- `M2 x 3 mm`
+
+Error-code exact matching remains on the separate `_contains_exact_code()` path.
+
+### Before And After
+
+| Run | Evaluated | Skipped | Failed | `tool_status_accuracy` | `manual_hit_at_k` | `manual_mrr` | `record_type_hit_at_k` | `citation_accuracy` |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|
+| M6 structured baseline | 26 | 4 | 1 | 0.9615 | 0.9444 | 0.9000 | 0.9231 | 0.9231 |
+| M6 live baseline | 30 | 0 | 1 | 0.9667 | 0.9500 | 0.9100 | 0.9286 | 0.9375 |
+| M6.1 structured after fix | 26 | 4 | 0 | 1.0000 | 1.0000 | 0.9556 | 1.0000 | 1.0000 |
+| M6.1 live after fix | 30 | 0 | 0 | 1.0000 | 1.0000 | 0.9600 | 1.0000 | 1.0000 |
+
+M6.1 live retrieval also reported `identifier_hit_at_k=1.0000`, `citation_coverage=1.0000`, `empty_unexpected_result_rate=0.0000`, and `latency_ms_p95=6268.05`. The higher p95 latency than M6 is recorded as provider/runtime variation and should not be interpreted as a quality regression.
+
+### Decision
+
+M6.1 closes the only M6 golden-set failure without weakening the evaluation target. M7 can proceed to FRU dependency graph work, but should keep using the M6/M6.1 golden set as a regression suite.

@@ -49,7 +49,7 @@ def _service() -> ThinkPadToolService:
                 "columns": ["Component", "Screw"],
                 "row": {
                     "Component": "Built-in battery",
-                    "Screw": "M2 x 3 mm",
+                    "Screw": "M2 × 3 mm",
                 },
                 "citation": _citation(72, "1050"),
             },
@@ -130,8 +130,29 @@ def test_get_screw_spec_does_not_infer_missing_values() -> None:
 
     assert response["status"] == "ok"
     row = response["results"][0]["row"]
-    assert row["Screw"] == "M2 x 3 mm"
+    assert row["Screw"] == "M2 × 3 mm"
     assert "Torque" not in row
+
+
+def test_get_screw_spec_normalizes_screw_size_multiplication_forms() -> None:
+    service = _service()
+
+    for query in ("M2 x 3", "M2*3", "M2x3 mm"):
+        response = service.get_screw_spec("X1 Carbon Gen 9", query)
+
+        assert response["status"] == "ok"
+        assert response["results"][0]["record_id"] == "battery_screw"
+        assert response["results"][0]["row"]["Screw"] == "M2 × 3 mm"
+
+
+def test_lookup_error_code_exact_matching_survives_screw_normalization() -> None:
+    service = _service()
+
+    exact = service.lookup_error_code("0271")
+    embedded = service.lookup_error_code("271")
+
+    assert exact["status"] == "ok"
+    assert embedded["status"] == "not_found"
 
 
 def test_get_fru_procedure_requires_unambiguous_model() -> None:
