@@ -449,3 +449,120 @@ M0-M7 meet their intended milestone goals, but the audit keeps three boundaries 
 - M5/M7 return evidence JSON; generated repair-plan quality belongs to M8 and must be evaluated separately.
 
 Decision: M8 can proceed after committing the M7.1 audit artifacts.
+
+## M8 Repair-Planning Agent Baseline
+
+- Date: 2026-06-12
+- Milestone: M8 Repair-Planning Agent + Scaled Performance Evaluation
+- Canonical performance report: `docs/M8_AGENT_PERFORMANCE_BASELINE.md`
+- Golden set: `tests/fixtures/thinkpad_m8_agent_golden_set.json`
+- Golden cases: 96
+- Stress candidates: 194 local generated cases under ignored `data/eval/`
+- Live provider: DashScope through local `DASHSCOPE_API_KEY`; no key or raw provider output committed
+- Out of scope: new MCP tool, production answer endpoint, Ragas faithfulness, new HMM downloads, committed provider traces
+
+### Why M8 Has Separate Metrics
+
+M7 evidence-tool metrics reached 1.0 on the current 36-case gate, but those metrics do not measure generated repair-plan quality. M8 therefore evaluates three separate layers:
+
+| Layer | What It Measures | M8 Evidence |
+|---|---|---|
+| Evidence tools | Whether structured tools return cited evidence | M7 structured/live regression stays clean |
+| Agent trajectory | Whether the agent selects the expected tools and preserves evidence | M8 deterministic and live retrieval 96-case runs |
+| Generated plan faithfulness | Whether live LLM composition preserves citations and avoids unsupported claims | M8 live LLM 96-case run |
+
+### 96-Case Golden Set
+
+| Category | Cases |
+|---|---:|
+| Model ambiguity / clarification | 12 |
+| Exact machine-type resolution | 8 |
+| Error-code or diagnostic evidence | 12 |
+| Screw / torque evidence | 12 |
+| FRU procedure plans | 16 |
+| Dependency-chain plans | 12 |
+| Diagram citation requirements | 8 |
+| Safety-warning requirements | 8 |
+| Unsupported / negative cases | 8 |
+| Total | 96 |
+
+### Baseline Runs
+
+| Run | Cases | Failed | Pass Rate | Provider Error Rate | Retrieval Fallback Rate | Unsupported Claim Rate | p50 Latency | p95 Latency |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|
+| Deterministic 96-case | 96 | 0 | 1.0000 | 0.0000 | 0.0000 | 0.0000 | 15 ms | 16 ms |
+| Live retrieval 96-case | 96 | 0 | 1.0000 | 0.0000 | 0.0417 | 0.0000 | 1344 ms | 6032 ms |
+| Live LLM 96-case | 96 | 5 | 0.9479 | 0.0521 | 0.0833 | 0.0521 | 4359 ms | 59000 ms |
+| Stress deterministic | 194 | 17 | 0.9124 | 0.0000 | 0.0000 | 0.0000 | 15 ms | 16 ms |
+| Stress live retrieval | 194 | 17 | 0.9124 | 0.0000 | 0.0309 | 0.0000 | 1375 ms | 6047 ms |
+
+### Deterministic Agent Result
+
+The deterministic run passed all 96 committed golden cases.
+
+| Metric | Value |
+|---|---:|
+| `final_plan_status_accuracy` | 1.0000 |
+| `trajectory_tool_sequence_accuracy` | 1.0000 |
+| `required_tool_coverage` | 1.0000 |
+| `clarification_accuracy` | 1.0000 |
+| `citation_coverage` | 1.0000 |
+| `citation_accuracy` | 1.0000 |
+| `evidence_identifier_coverage` | 1.0000 |
+| `safety_warning_inclusion` | 1.0000 |
+
+Interpretation: deterministic agent orchestration is clean for the committed M8 fixture. This proves tool sequencing and citation plumbing, not open-ended answer generation quality.
+
+### Live Retrieval Result
+
+The live retrieval run passed all 96 committed golden cases. It recorded provider fallback events instead of hiding them:
+
+- `retrieval_fallback_rate=0.0417`
+- observed fallback type: DashScope rerank connection resets falling back to deterministic fused/domain-ranked evidence
+
+Interpretation: the agent can run through the live retrieval path at 96-case scale, and the fallback path is real. The run does not prove every possible technician query will retrieve the right evidence.
+
+### Live LLM Result
+
+The live LLM run completed all 96 cases, with LLM composition required for 36 cases. Five cases failed.
+
+| Case | Category | Interpretation |
+|---|---|---|
+| `m8_fru_thinkpad_t480_hmm_1010` | FRU procedure | live LLM/provider composition failure |
+| `m8_fru_thinkpad_t490_hmm_1020` | FRU procedure | live LLM/provider composition failure |
+| `m8_fru_thinkpad_x1_carbon_gen9_x1_yoga_gen6_hmm_1030` | FRU procedure | live LLM/provider composition failure |
+| `m8_fru_thinkpad_p1_gen4_x1_extreme_gen4_hmm_1010` | FRU procedure | live LLM/provider composition failure |
+| `m8_chain_thinkpad_t480_hmm_1020` | Dependency-chain plan | live LLM/provider composition failure |
+
+Key live LLM metrics:
+
+| Metric | Value |
+|---|---:|
+| `llm_citation_preservation` | 0.8611 |
+| `provider_error_rate` | 0.0521 |
+| `unsupported_claim_rate` | 0.0521 |
+| `citation_accuracy` | 1.0000 |
+| `required_tool_coverage` | 1.0000 |
+
+Interpretation: the evidence layer remained available, but live answer composition is not yet clean. M8 should be presented as a measured first agent baseline with a clear remediation path, not as a perfect final repair-answer system.
+
+### Stress Benchmark
+
+The stress generator produced 194 local cases from M3 extraction records. These are not gold cases because they inherit extraction-candidate noise.
+
+Stress findings:
+
+- Deterministic and live retrieval stress both had 17 failed cases.
+- Failures are mainly caused by diagnostic pseudo-FRU IDs and component alias gaps from raw extraction labels.
+- Live retrieval improved citation/identifier coverage among successful stress cases but did not resolve candidate-generation noise.
+
+Decision: keep the 96-case fixture as the canonical M8 gold baseline and use the stress set to drive M8/M9 hardening work.
+
+### M8 Decision
+
+M8 meets its implementation and scaled-evaluation goals with risk:
+
+- `complete`: local repair-planning agent client, deterministic orchestration, CLIs, agent evaluator, 96-case fixture, docs, and tests.
+- `complete_with_risk`: live LLM generated-plan path, because 5/96 cases failed and `llm_citation_preservation` is below 1.0.
+
+Next remediation should focus on LLM composer retries, stricter structured output validation, and component alias cleanup before exposing a final `plan_repair` MCP tool.

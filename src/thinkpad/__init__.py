@@ -1,5 +1,21 @@
 """ThinkPad HMM domain utilities for the Service Copilot project."""
 
+from src.thinkpad.agent import (
+    AgentRefusal,
+    EvidenceBundle,
+    RepairPlanRequest,
+    RepairPlanResult,
+    RepairPlanStep,
+    ToolCallTrace,
+    plan_thinkpad_repair,
+)
+from src.thinkpad.agent_evaluation import (
+    ThinkPadAgentEvalReport,
+    ThinkPadAgentEvalResult,
+    ThinkPadAgentGoldenCase,
+    evaluate_thinkpad_agent_cases,
+    load_thinkpad_agent_golden_set,
+)
 from src.thinkpad.evaluation import (
     ThinkPadEvalReport,
     ThinkPadEvalResult,
@@ -30,9 +46,11 @@ from src.thinkpad.retrieval_index import RetrievalIndexBuildResult, build_thinkp
 from src.thinkpad.tool_service import ThinkPadToolService, ThinkPadToolServiceError
 
 __all__ = [
+    "AgentRefusal",
     "Citation",
     "DependencyEdge",
     "DomainModelError",
+    "EvidenceBundle",
     "ExtractionOptions",
     "ExtractionResult",
     "FigureRecord",
@@ -44,7 +62,13 @@ __all__ = [
     "ModelCandidate",
     "ModelResolution",
     "RetrievalIndexBuildResult",
+    "RepairPlanRequest",
+    "RepairPlanResult",
+    "RepairPlanStep",
     "TableRecord",
+    "ThinkPadAgentEvalReport",
+    "ThinkPadAgentEvalResult",
+    "ThinkPadAgentGoldenCase",
     "ThinkPadEvalReport",
     "ThinkPadEvalResult",
     "ThinkPadGoldenCase",
@@ -52,14 +76,18 @@ __all__ = [
     "ThinkPadRetrievalResponse",
     "ThinkPadToolService",
     "ThinkPadToolServiceError",
+    "ToolCallTrace",
     "WarningRecord",
     "build_retrieval_chunks",
     "build_thinkpad_retrieval_index",
     "build_fru_dependency_graph",
+    "evaluate_thinkpad_agent_cases",
     "evaluate_thinkpad_cases",
     "extract_manual_artifacts",
     "load_manifest",
+    "load_thinkpad_agent_golden_set",
     "load_thinkpad_golden_set",
+    "plan_thinkpad_repair",
     "retrieve_thinkpad",
     "resolve_thinkpad_model",
 ]

@@ -1008,3 +1008,245 @@ Result: `docs/M0_M7_PROGRESS_AUDIT.md` records:
 - M8 Agent Client, answer faithfulness evaluation, broader golden sets, full human extraction audit, and production packaging as deferred.
 
 Decision: M8 can proceed after the M7.1 audit docs and script are committed. The next phase must evaluate generated repair plans separately and must not treat M7 graph evidence metrics as answer-quality metrics.
+
+## M8-001: Agent Unit And Evaluator Contract Tests
+
+- Date: 2026-06-12
+- Hypothesis: A deterministic repair-planning agent can orchestrate existing evidence tools without exposing a new MCP tool, and the evaluator can score trajectory, citation, safety, provider, and unsupported-claim behavior.
+
+Commands and results:
+
+| Command | Result |
+|---|---|
+| `.\.venv\Scripts\python -m pytest tests\thinkpad\test_agent.py tests\thinkpad\test_agent_evaluation.py -q --basetemp data\tmp\pytest_m8_agent` | Passed, 9 tests. |
+| `.\.venv\Scripts\ruff check src\thinkpad\agent.py src\thinkpad\agent_evaluation.py tests\thinkpad\test_agent.py tests\thinkpad\test_agent_evaluation.py scripts\thinkpad_agent_*.py` | Passed. |
+
+Validated behaviors:
+
+- Ambiguous model query returns `clarification_required`.
+- Machine-type query produces resolver, FRU procedure, dependency-chain, diagram, and safety tool trajectory.
+- Screw lookup is called only for screw/spec evidence queries.
+- Unsupported specific model returns refusal/not-found without LLM call.
+- Fake LLM output with unsupported identifiers is marked by validation.
+- Evaluator records provider errors, forbidden-tool failures, citation checks, safety inclusion, and trajectory coverage.
+
+Decision: proceed to full 96-case deterministic agent evaluation.
+
+## M8-002: Deterministic 96-Case Agent Golden Baseline
+
+- Date: 2026-06-12
+- Hypothesis: The no-LLM agent path should pass the full committed M8 golden set before live retrieval or live LLM is evaluated.
+- Golden set: `tests/fixtures/thinkpad_m8_agent_golden_set.json`
+- Cases: 96
+
+Command:
+
+```powershell
+.\.venv\Scripts\python scripts\thinkpad_agent_evaluate.py `
+  --golden-set tests\fixtures\thinkpad_m8_agent_golden_set.json `
+  --manifest data\manifests\manuals_manifest.yaml `
+  --extracted-dir data\extracted\m3 `
+  --collection thinkpad_m4 `
+  --mode deterministic `
+  --output data\eval\m8_agent_report_deterministic.json `
+  --progress-jsonl data\eval\m8_agent_progress_deterministic.jsonl
+```
+
+Result: Passed and wrote ignored local report.
+
+| Metric | Value |
+|---|---:|
+| Cases | 96 |
+| Failed cases | 0 |
+| `passed_case_rate` | 1.0000 |
+| `final_plan_status_accuracy` | 1.0000 |
+| `trajectory_tool_sequence_accuracy` | 1.0000 |
+| `required_tool_coverage` | 1.0000 |
+| `citation_accuracy` | 1.0000 |
+| `evidence_identifier_coverage` | 1.0000 |
+| `safety_warning_inclusion` | 1.0000 |
+| `unsupported_claim_rate` | 0.0000 |
+| `latency_ms_p95` | 16.00 |
+
+Decision: deterministic orchestration is clean for the committed M8 golden set. This result should not be described as generated-answer quality.
+
+## M8-003: Live DashScope Retrieval 96-Case Agent Baseline
+
+- Date: 2026-06-12
+- Hypothesis: Full M8 agent evaluation can run against the live DashScope retrieval path at 96-case scale without silent skips.
+- Credential handling: `DASHSCOPE_API_KEY` was set only in the local shell process and was not written to files.
+
+Command:
+
+```powershell
+.\.venv\Scripts\python scripts\thinkpad_agent_evaluate.py `
+  --golden-set tests\fixtures\thinkpad_m8_agent_golden_set.json `
+  --manifest data\manifests\manuals_manifest.yaml `
+  --extracted-dir data\extracted\m3 `
+  --collection thinkpad_m4 `
+  --require-live-retrieval `
+  --output data\eval\m8_agent_report_live_retrieval.json `
+  --progress-jsonl data\eval\m8_agent_progress_live_retrieval.jsonl
+```
+
+Result: Passed and wrote ignored local report. Runtime was about 2 minutes 52 seconds.
+
+Observed live behavior:
+
+- 4 DashScope rerank connection resets were recorded.
+- The agent fell back to deterministic fused/domain-ranked retrieval evidence.
+- No case failed.
+
+| Metric | Value |
+|---|---:|
+| Cases | 96 |
+| Failed cases | 0 |
+| `passed_case_rate` | 1.0000 |
+| `provider_error_rate` | 0.0000 |
+| `retrieval_fallback_rate` | 0.0417 |
+| `unsupported_claim_rate` | 0.0000 |
+| `citation_accuracy` | 1.0000 |
+| `latency_ms_p50` | 1344.00 |
+| `latency_ms_p95` | 6032.00 |
+
+Decision: live retrieval is usable for M8 agent evaluation, and the fallback behavior is visible. Do not hide fallback rate behind a headline pass rate.
+
+## M8-004: Live DashScope LLM 96-Case Agent Baseline
+
+- Date: 2026-06-12
+- Hypothesis: Live DashScope LLM composition can rewrite retrieved evidence into cited repair plans, but generated plan faithfulness must be measured separately from evidence retrieval.
+- Model behavior: LLM composition was enabled only for cases marked `llm_required=true`; all 96 cases were still evaluated.
+- Credential handling: `DASHSCOPE_API_KEY` was set only in the local shell process and was not written to files.
+
+Command:
+
+```powershell
+.\.venv\Scripts\python scripts\thinkpad_agent_evaluate.py `
+  --golden-set tests\fixtures\thinkpad_m8_agent_golden_set.json `
+  --manifest data\manifests\manuals_manifest.yaml `
+  --extracted-dir data\extracted\m3 `
+  --collection thinkpad_m4 `
+  --live-llm `
+  --output data\eval\m8_agent_report_live_llm.json `
+  --progress-jsonl data\eval\m8_agent_progress_live_llm.jsonl
+```
+
+Result: Completed and wrote ignored local report. Runtime was about 32 minutes 19 seconds.
+
+Observed live behavior:
+
+- Multiple DashScope rerank connection resets occurred and fell back to deterministic evidence.
+- One dense retrieval embedding connection reset fell back to sparse-only evidence.
+- 5 cases failed, all in live LLM/provider composition or validation.
+
+| Metric | Value |
+|---|---:|
+| Cases | 96 |
+| LLM-required cases | 36 |
+| Failed cases | 5 |
+| `passed_case_rate` | 0.9479 |
+| `final_plan_status_accuracy` | 0.9479 |
+| `trajectory_tool_sequence_accuracy` | 1.0000 |
+| `required_tool_coverage` | 1.0000 |
+| `citation_accuracy` | 1.0000 |
+| `llm_citation_preservation` | 0.8611 |
+| `provider_error_rate` | 0.0521 |
+| `retrieval_fallback_rate` | 0.0833 |
+| `unsupported_claim_rate` | 0.0521 |
+| `latency_ms_p50` | 4359.00 |
+| `latency_ms_p95` | 59000.00 |
+
+Failed cases:
+
+- `m8_fru_thinkpad_t480_hmm_1010`
+- `m8_fru_thinkpad_t490_hmm_1020`
+- `m8_fru_thinkpad_x1_carbon_gen9_x1_yoga_gen6_hmm_1030`
+- `m8_fru_thinkpad_p1_gen4_x1_extreme_gen4_hmm_1010`
+- `m8_chain_thinkpad_t480_hmm_1020`
+
+Decision: live LLM plan generation is useful but not clean. M8 should commit this as a measured baseline with remediation, not tune the golden set downward.
+
+## M8-005: Stress Candidate Generation And Stress Runs
+
+- Date: 2026-06-12
+- Hypothesis: A larger non-gold stress set can expose robustness and alias/candidate-quality issues that a curated golden set may miss.
+- Stress output: ignored `data/eval/m8_agent_stress_candidates.json`
+- Cases: 194
+- Note: These cases are generated from M3 extraction artifacts and are not human-reviewed gold truth.
+
+Candidate generation command:
+
+```powershell
+.\.venv\Scripts\python scripts\thinkpad_generate_agent_eval_candidates.py `
+  --manifest data\manifests\manuals_manifest.yaml `
+  --extracted-dir data\extracted\m3 `
+  --output data\eval\m8_agent_stress_candidates.json `
+  --per-manual 32
+```
+
+Generated case mix:
+
+| Category | Cases |
+|---|---:|
+| `stress_error_code` | 64 |
+| `stress_fru_procedure` | 64 |
+| `stress_screw_spec` | 50 |
+| `stress_safety` | 8 |
+| `stress_diagram` | 8 |
+
+Deterministic stress command:
+
+```powershell
+.\.venv\Scripts\python scripts\thinkpad_agent_evaluate.py `
+  --golden-set data\eval\m8_agent_stress_candidates.json `
+  --manifest data\manifests\manuals_manifest.yaml `
+  --extracted-dir data\extracted\m3 `
+  --collection thinkpad_m4 `
+  --mode deterministic `
+  --output data\eval\m8_agent_stress_report_deterministic.json `
+  --progress-jsonl data\eval\m8_agent_stress_progress_deterministic.jsonl
+```
+
+Live retrieval stress command:
+
+```powershell
+.\.venv\Scripts\python scripts\thinkpad_agent_evaluate.py `
+  --golden-set data\eval\m8_agent_stress_candidates.json `
+  --manifest data\manifests\manuals_manifest.yaml `
+  --extracted-dir data\extracted\m3 `
+  --collection thinkpad_m4 `
+  --require-live-retrieval `
+  --output data\eval\m8_agent_stress_report_live_retrieval.json `
+  --progress-jsonl data\eval\m8_agent_stress_progress_live_retrieval.jsonl
+```
+
+Stress results:
+
+| Run | Cases | Failed | Pass Rate | Retrieval Fallback Rate | Citation Accuracy | Identifier Coverage | p95 Latency |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| Deterministic stress | 194 | 17 | 0.9124 | 0.0000 | 0.9227 | 0.9086 | 16.00 |
+| Live retrieval stress | 194 | 17 | 0.9124 | 0.0309 | 0.9794 | 0.9785 | 6047.00 |
+
+Findings:
+
+- Stress failures are mostly diagnostic pseudo-FRUs and component alias gaps.
+- Live retrieval improved citation and identifier coverage among successful cases but did not solve noisy candidate generation.
+- Stress results should drive remediation, not headline accuracy claims.
+
+Decision: keep the 96-case set as canonical M8 gold and use stress results as an M8/M9 hardening queue.
+
+## M8-006: Final Regression And Lint Validation
+
+- Date: 2026-06-12
+- Hypothesis: M8 agent code, benchmark code, fixtures, and documentation preserve the full ThinkPad regression suite, upstream smoke imports, dashboard smoke, lint, and whitespace hygiene.
+
+Commands and results:
+
+| Command | Result |
+|---|---|
+| `.\.venv\Scripts\python -m pytest tests\thinkpad -q --basetemp data\tmp\pytest_m8_final` | Passed, 87 tests. |
+| `.\.venv\Scripts\python -m pytest tests\unit\test_smoke_imports.py -q` | Passed, 22 tests. |
+| `.\.venv\Scripts\python -m pytest tests\e2e\test_dashboard_smoke.py -q` | Passed, 8 tests. |
+| `.\.venv\Scripts\ruff check src\thinkpad src\mcp_server\tools\thinkpad_tools.py tests\thinkpad scripts\thinkpad_*.py` | Passed. |
+
+Decision: M8 implementation and docs are ready for final whitespace/secret checks and milestone commit. Local `data/eval/` reports, provider traces, vector/index artifacts, and private interview notes remain uncommitted.

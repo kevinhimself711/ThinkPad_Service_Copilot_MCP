@@ -1026,3 +1026,83 @@ M8 can build a small repair-planning agent that calls resolver, exact tools, `ge
 ### Handoff
 
 M8 can begin with a small repair-planning agent that orchestrates the existing resolver, exact lookup tools, retrieval evidence, FRU procedure lookup, dependency-chain graph tool, diagrams, and safety warnings. The first M8 deliverable should be agent trajectory evaluation, not a broad productionization push.
+
+---
+
+## M8: Repair-Planning Agent + Scaled Performance Evaluation
+
+- Date: 2026-06-12
+- User goal: Implement a local single-agent ThinkPad repair-planning client and replace the small M8 evaluation idea with a 96-case golden benchmark, full live retrieval/LLM baselines, and a stress benchmark.
+- Scope included: deterministic agent orchestration, optional live DashScope LLM composition, agent contracts, single-query CLI, benchmark CLI, stress-candidate generator, 96-case fixture, agent evaluator, tests, scaled live evaluation, documentation, private interview notes.
+- Scope excluded: new MCP tool, final production answer endpoint, new HMM downloads, committed local reports, committed provider outputs, committed `data/`, committed `docs/INTERVIEW_NOTES.md`.
+
+### File-Level Changes
+
+| Change | Path | Implementation Fact |
+|---|---|---|
+| Added | `src/thinkpad/agent.py` | Added `RepairPlanRequest`, `RepairPlanResult`, `ToolCallTrace`, `EvidenceBundle`, `RepairPlanStep`, `AgentRefusal`, and `plan_thinkpad_repair()` for deterministic orchestration plus optional LLM evidence rewriting. |
+| Added | `src/thinkpad/agent_evaluation.py` | Added M8 agent golden-set loader, evaluator, per-case result model, report model, deterministic metrics, provider/fallback accounting, latency metrics, and JSON-safe serialization. |
+| Modified | `src/thinkpad/__init__.py` | Exported M8 agent and agent-evaluation APIs. |
+| Added | `scripts/thinkpad_agent_plan.py` | Added single-query CLI for local repair-plan generation with deterministic, live retrieval, and live LLM flags. |
+| Added | `scripts/thinkpad_agent_evaluate.py` | Added 96-case benchmark CLI with deterministic, live retrieval, live LLM, offset/limit, and progress JSONL support. |
+| Added | `scripts/thinkpad_generate_agent_eval_candidates.py` | Added local stress-candidate generator from M3 JSONL records; outputs ignored non-gold stress cases under `data/eval/`. |
+| Added | `tests/fixtures/thinkpad_m8_agent_golden_set.json` | Added 96 copyright-light agent cases across 8 manuals and 9 evaluation categories. |
+| Added | `tests/thinkpad/test_agent.py` | Added tests for ambiguity refusal, machine-type plan trajectory, screw-only lookup behavior, unsupported model LLM avoidance, and fake LLM unsupported-claim detection. |
+| Added | `tests/thinkpad/test_agent_evaluation.py` | Added tests for fixture validation, metric calculation, forbidden-tool detection, and provider-error accounting. |
+| Added | `docs/M8_AGENT_PERFORMANCE_BASELINE.md` | Added human-readable M8 performance report with deterministic, live retrieval, live LLM, and stress results. |
+| Modified | `docs/DEV_SPEC_THINKPAD.md` | Added M8 agent API, contracts, behavior rules, CLIs, and evaluation requirements. |
+| Modified | `docs/EVAL_REPORT.md` | Added M8 baseline metrics and interpretation separating evidence-tool, agent trajectory, and generated-plan quality. |
+| Modified | `docs/EXPERIMENTS.md` | Added M8 test, deterministic, live retrieval, live LLM, and stress experiment records. |
+| Modified | `docs/IMPLEMENTATION_LOG.md` | Added this M8 implementation fact record. |
+| Modified locally, not committed | `docs/INTERVIEW_NOTES.md` | Added M8 interview-preparation questions about agent orchestration, scaled evaluation, live LLM failures, and metric interpretation. |
+
+### Agent Behavior
+
+| Behavior | Implementation Fact |
+|---|---|
+| Model guard | The agent calls resolver first and returns `clarification_required` for ambiguous high-risk model/generation queries. |
+| Exact facts | Error codes, screw specs, FRU procedures, diagrams, warnings, and dependency chains are obtained from existing structured evidence tools. |
+| Retrieval | Live retrieval is optional and explicit; the benchmark CLI reuses the local `thinkpad_m4` index and cached retriever setup. |
+| LLM | LLM composition is optional and uses evidence-only prompts; missing citations, unsupported identifiers, and provider errors are recorded in validation. |
+| Safety | Safety-warning cases require `get_safety_warnings` and cited warning evidence. |
+| Refusal | Unsupported models and ambiguous model queries do not proceed to unique repair plans or LLM composition. |
+
+### Scripts And Commands
+
+| Script/Command | Purpose | Result |
+|---|---|---|
+| `.\.venv\Scripts\python -m pytest tests\thinkpad\test_agent.py tests\thinkpad\test_agent_evaluation.py -q --basetemp data\tmp\pytest_m8_agent` | Focused M8 agent and evaluator tests. | Passed, 9 tests. |
+| `.\.venv\Scripts\ruff check src\thinkpad\agent.py src\thinkpad\agent_evaluation.py tests\thinkpad\test_agent.py tests\thinkpad\test_agent_evaluation.py scripts\thinkpad_agent_*.py` | Focused lint for M8 code/tests/scripts. | Passed. |
+| `.\.venv\Scripts\python scripts\thinkpad_agent_evaluate.py --golden-set tests\fixtures\thinkpad_m8_agent_golden_set.json --manifest data\manifests\manuals_manifest.yaml --extracted-dir data\extracted\m3 --collection thinkpad_m4 --mode deterministic --output data\eval\m8_agent_report_deterministic.json --progress-jsonl data\eval\m8_agent_progress_deterministic.jsonl` | Run deterministic 96-case agent baseline. | Passed; 96 cases, 0 failures. |
+| `.\.venv\Scripts\python scripts\thinkpad_agent_evaluate.py --golden-set tests\fixtures\thinkpad_m8_agent_golden_set.json --manifest data\manifests\manuals_manifest.yaml --extracted-dir data\extracted\m3 --collection thinkpad_m4 --require-live-retrieval --output data\eval\m8_agent_report_live_retrieval.json --progress-jsonl data\eval\m8_agent_progress_live_retrieval.jsonl` | Run full 96-case live DashScope retrieval baseline. | Passed; 96 cases, 0 failures, 4 retrieval fallback events. |
+| `.\.venv\Scripts\python scripts\thinkpad_agent_evaluate.py --golden-set tests\fixtures\thinkpad_m8_agent_golden_set.json --manifest data\manifests\manuals_manifest.yaml --extracted-dir data\extracted\m3 --collection thinkpad_m4 --live-llm --output data\eval\m8_agent_report_live_llm.json --progress-jsonl data\eval\m8_agent_progress_live_llm.jsonl` | Run full 96-case live DashScope LLM baseline. | Completed; 96 cases, 5 failures, all live LLM/provider composition or validation failures. |
+| `.\.venv\Scripts\python scripts\thinkpad_generate_agent_eval_candidates.py --manifest data\manifests\manuals_manifest.yaml --extracted-dir data\extracted\m3 --output data\eval\m8_agent_stress_candidates.json --per-manual 32` | Generate local non-gold stress cases from M3 records. | Passed; 194 cases generated. |
+| `.\.venv\Scripts\python scripts\thinkpad_agent_evaluate.py --golden-set data\eval\m8_agent_stress_candidates.json --manifest data\manifests\manuals_manifest.yaml --extracted-dir data\extracted\m3 --collection thinkpad_m4 --mode deterministic --output data\eval\m8_agent_stress_report_deterministic.json --progress-jsonl data\eval\m8_agent_stress_progress_deterministic.jsonl` | Run deterministic stress benchmark. | Completed; 194 cases, 17 failures. |
+| `.\.venv\Scripts\python scripts\thinkpad_agent_evaluate.py --golden-set data\eval\m8_agent_stress_candidates.json --manifest data\manifests\manuals_manifest.yaml --extracted-dir data\extracted\m3 --collection thinkpad_m4 --require-live-retrieval --output data\eval\m8_agent_stress_report_live_retrieval.json --progress-jsonl data\eval\m8_agent_stress_progress_live_retrieval.jsonl` | Run live retrieval stress benchmark. | Completed; 194 cases, 17 failures, 6 retrieval fallback events. |
+| `.\.venv\Scripts\python -m pytest tests\thinkpad -q --basetemp data\tmp\pytest_m8_final` | Final full ThinkPad regression after docs and M8 code were in place. | Passed, 87 tests. |
+| `.\.venv\Scripts\python -m pytest tests\unit\test_smoke_imports.py -q` | Final upstream/domain smoke import check. | Passed, 22 tests. |
+| `.\.venv\Scripts\python -m pytest tests\e2e\test_dashboard_smoke.py -q` | Final dashboard smoke check. | Passed, 8 tests. |
+| `.\.venv\Scripts\ruff check src\thinkpad src\mcp_server\tools\thinkpad_tools.py tests\thinkpad scripts\thinkpad_*.py` | Final lint check for ThinkPad code, MCP tools, tests, and scripts. | Passed. |
+
+### Baseline Results
+
+| Run | Cases | Failed | Pass Rate | Provider Error Rate | Retrieval Fallback Rate | Unsupported Claim Rate | p95 Latency |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| Deterministic 96-case | 96 | 0 | 1.0000 | 0.0000 | 0.0000 | 0.0000 | 16 ms |
+| Live retrieval 96-case | 96 | 0 | 1.0000 | 0.0000 | 0.0417 | 0.0000 | 6032 ms |
+| Live LLM 96-case | 96 | 5 | 0.9479 | 0.0521 | 0.0833 | 0.0521 | 59000 ms |
+| Stress deterministic | 194 | 17 | 0.9124 | 0.0000 | 0.0000 | 0.0000 | 16 ms |
+| Stress live retrieval | 194 | 17 | 0.9124 | 0.0000 | 0.0309 | 0.0000 | 6047 ms |
+
+### Deviations And Risks
+
+- M8 live LLM did not reach 1.0. Five cases failed and are intentionally recorded as real failures.
+- `llm_citation_preservation=0.8611` shows that generated plan faithfulness is a separate problem from evidence retrieval.
+- Stress cases are generated from extraction candidates and are not gold truth; failures highlight candidate noise and alias gaps rather than verified answer failures.
+- Live retrieval had fallback events due to provider connection resets. The fallback path prevented user-visible failures in the current benchmarks, but this should still be visible in reports.
+- The agent remains a local CLI/Python client, not a new MCP server tool.
+- Raw local reports, progress JSONL files, stress candidates, and provider outputs remain under ignored `data/eval/`.
+
+### Handoff
+
+M8 is ready for milestone commit after final whitespace and secret checks. M9 should focus on packaging and interview readiness, but the highest-value M8 remediation before demo polish is live LLM composer hardening: retry, stricter structured output, and component alias cleanup from stress failures.

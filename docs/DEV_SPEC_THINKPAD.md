@@ -555,3 +555,73 @@ Evaluation:
 - Canonical M7 fixture: `tests/fixtures/thinkpad_m7_golden_set.json`.
 - It preserves all M6 cases and adds graph cases for battery, system board, exact FRU ID lookup, ambiguous model refusal, and negative component lookup.
 - Structured M7 evaluation skips live retrieval cases by default and must report zero evaluated failures before M8 agent work.
+
+## 18. M8 Repair-Planning Agent Contract
+
+M8 adds a local repair-planning agent client over the M2-M7 evidence tools. It does not add a new MCP tool and does not replace the evidence-tool layer.
+
+Agent API:
+
+```python
+plan_thinkpad_repair(
+    query: str,
+    service: ThinkPadToolService,
+    use_llm: bool = False,
+    llm: BaseLLM | None = None,
+    collection: str = "thinkpad_m4",
+    top_k: int = 5,
+    use_retrieval: bool = False,
+    require_live_retrieval: bool = False,
+) -> RepairPlanResult
+```
+
+Contracts:
+
+- `RepairPlanRequest`: normalized user request and execution flags.
+- `ToolCallTrace`: tool name, arguments, status, latency, error, and small metadata such as retry attempts.
+- `EvidenceBundle`: resolver output, evidence results, citations, identifiers, record types, and optional retrieval evidence.
+- `RepairPlanStep`: cited structured step assembled from evidence.
+- `AgentRefusal`: clarification, unsupported model, not-found, or provider/validation refusal.
+- `RepairPlanResult`: status, clarification flag, tool trace, evidence bundle, repair plan, citations, and validation metadata.
+
+Behavior rules:
+
+- Ambiguous model or generation for a high-risk repair plan returns `clarification_required`; it must not generate a unique procedure.
+- Specific unsupported models return `not_found` or refusal without calling LLM composition.
+- Exact facts such as FRU IDs, error codes, screw sizes, torque, and warnings must come from structured evidence tools.
+- The LLM, when enabled, may rewrite evidence into readable prose but must not invent evidence outside the bundle.
+- Every repair-plan step must contain citations. Missing citations are validation failures.
+- Live retrieval is optional and explicit. Deterministic mode remains the default path for reproducible testing.
+
+CLIs:
+
+```powershell
+.\.venv\Scripts\python scripts\thinkpad_agent_plan.py "21CB battery removal plan"
+
+.\.venv\Scripts\python scripts\thinkpad_agent_evaluate.py `
+  --golden-set tests\fixtures\thinkpad_m8_agent_golden_set.json `
+  --manifest data\manifests\manuals_manifest.yaml `
+  --extracted-dir data\extracted\m3 `
+  --collection thinkpad_m4 `
+  --mode deterministic `
+  --output data\eval\m8_agent_report_deterministic.json
+
+.\.venv\Scripts\python scripts\thinkpad_generate_agent_eval_candidates.py `
+  --manifest data\manifests\manuals_manifest.yaml `
+  --extracted-dir data\extracted\m3 `
+  --output data\eval\m8_agent_stress_candidates.json
+```
+
+Evaluation:
+
+- Canonical M8 fixture: `tests/fixtures/thinkpad_m8_agent_golden_set.json`.
+- It contains 96 copyright-light cases across model ambiguity, machine-type resolution, error code, screw spec, FRU procedure, dependency chain, diagram, safety, and negative categories.
+- Stress candidates generated from M3 artifacts are local ignored pressure tests, not gold accuracy claims.
+- Required report metrics include status accuracy, tool sequence accuracy, required tool coverage, citation coverage/accuracy, evidence identifier coverage, safety inclusion, unsupported claim rate, provider error rate, retrieval fallback rate, LLM citation preservation, and latency p50/p95.
+- M8 evaluation must distinguish evidence-tool accuracy, agent trajectory accuracy, and generated plan faithfulness.
+
+Known M8 baseline result:
+
+- Deterministic 96-case and live retrieval 96-case runs passed the committed golden set.
+- Live LLM 96-case run completed but had 5 failures, with `llm_citation_preservation=0.8611`, `provider_error_rate=0.0521`, and `unsupported_claim_rate=0.0521`.
+- These failures are recorded as real generated-plan/provider issues, not hidden by weakening the golden set.

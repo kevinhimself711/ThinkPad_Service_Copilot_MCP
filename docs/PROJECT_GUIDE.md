@@ -82,7 +82,7 @@ Do not rewrite the generic MCP server, vector store layer, dashboard, provider a
 
 ## 3. Current Repository Reality
 
-The repository has completed M0-M7 and is ready to plan M8 Agent Client work.
+The repository has completed M0-M8 and is ready for M9 packaging/interview-readiness work, with M8 live LLM remediation carried as an explicit risk.
 
 Current milestone status:
 
@@ -97,8 +97,11 @@ Current milestone status:
 | M6 | Complete | Golden evaluation baseline and lightweight dashboard view are implemented. |
 | M6.1 | Complete | Screw-spec normalization regression was fixed and re-evaluated. |
 | M7 | Complete with risk | FRU dependency graph traversal is exposed as MCP evidence; graph edges still inherit M3 extraction-candidate risk. |
+| M7.1 | Complete | M0-M7 completion audit and live regression are recorded. |
+| M8 | Complete with risk | Local repair-planning agent, 96-case benchmark, live retrieval baseline, live LLM baseline, and stress benchmark are implemented; live LLM generation has 5 recorded failures. |
 
 Canonical audit report: `docs/M0_M7_PROGRESS_AUDIT.md`.
+Canonical M8 performance report: `docs/M8_AGENT_PERFORMANCE_BASELINE.md`.
 
 Canonical paths:
 
@@ -122,9 +125,12 @@ scripts/thinkpad_build_retrieval_index.py
 scripts/thinkpad_query_retrieval.py
 scripts/thinkpad_evaluate.py
 scripts/thinkpad_audit_milestones.py
+scripts/thinkpad_agent_plan.py
+scripts/thinkpad_agent_evaluate.py
+scripts/thinkpad_generate_agent_eval_candidates.py
 ```
 
-Current MCP tools expose structured evidence, not final generated repair answers. M8 must add and evaluate the agent workflow separately.
+Current MCP tools expose structured evidence. M8 adds a local Python/CLI repair-planning agent client but does not yet expose a `plan_repair` MCP tool.
 
 ---
 
@@ -460,7 +466,7 @@ Domain reranking should prefer:
 | M5 | MCP tools | ThinkPad-specific tool schemas and sample calls |
 | M6 | Evaluation/dashboard | golden set, baseline comparisons, trace/dashboard views |
 | M7 | Graph RAG | FRU dependency graph and traversal tool |
-| M8 | Agent client | simple tool-calling repair-planning workflow |
+| M8 | Agent client | local tool-calling repair-planning workflow plus trajectory/faithfulness baseline |
 | M9 | Packaging/interview readiness | Docker/CI, final README, demo script, resume and interview notes |
 
 Every milestone DoD also includes:
@@ -491,22 +497,22 @@ Do not claim a test passed unless it was run.
 
 ## 16. Open Risks
 
-Current risks carried forward from M1:
+Current risks carried forward after M8:
 
-- PyMuPDF table detection finds many candidates, but row/column correctness still needs synthetic and manual spot checks.
-- Figure extraction needs embedded-image versus raster-fallback comparison before using diagrams in answers.
-- FRU heading heuristics can confuse error-code rows and procedure sections unless M3 parser tests are strict.
-- Some manuals cover multiple models and generations, so section-level applicability may be needed later.
-- The local manifest contains real download integrity metadata, but committed examples should remain safe and copyright-light.
-- Upstream ingestion can discover PDFs, but ThinkPad-specific chunking and metadata enrichment are not implemented yet.
+- M1/M3 extraction artifacts are structured candidates, not fully human-audited gold facts.
+- Figure and diagram records are useful retrieval targets, but exact specs must still come from text/table evidence.
+- Some M3-derived stress cases expose diagnostic pseudo-FRU IDs and component alias gaps.
+- M4/M6/M7/M8 golden metrics are scoped to committed fixtures and do not represent every possible technician query.
+- M8 live LLM generation is not clean: the 96-case run had 5 failures and `llm_citation_preservation=0.8611`.
+- The local manifest and local index contain real operational metadata/artifacts, but committed examples must remain safe and copyright-light.
 
 Engineering response:
 
-- keep M2 small and deterministic
-- test with synthetic fixtures
+- keep deterministic evidence tools as the source of truth
 - preserve citations everywhere
 - prefer structured table records for exact facts
-- add retrieval only after the domain contracts are stable
+- use live provider tests when they reduce risk, but record provider fallback and failure rates honestly
+- harden LLM composition before exposing final repair planning through MCP
 
 ---
 
