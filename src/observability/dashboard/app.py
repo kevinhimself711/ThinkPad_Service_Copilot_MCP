@@ -44,6 +44,11 @@ def _page_evaluation_panel() -> None:
     render()
 
 
+def _page_thinkpad_evaluation() -> None:
+    from src.observability.dashboard.pages.thinkpad_evaluation import render
+    render()
+
+
 # ── Navigation ───────────────────────────────────────────────────────
 
 pages = [
@@ -53,6 +58,7 @@ pages = [
     st.Page(_page_ingestion_traces, title="Ingestion Traces", icon="🔬"),
     st.Page(_page_query_traces, title="Query Traces", icon="🔎"),
     st.Page(_page_evaluation_panel, title="Evaluation Panel", icon="📏"),
+    st.Page(_page_thinkpad_evaluation, title="ThinkPad Evaluation", icon="T"),
 ]
 
 

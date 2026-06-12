@@ -16,9 +16,10 @@ Usage::
 
 from __future__ import annotations
 
+import json
 import logging
 from pathlib import Path
-from typing import Any, List
+from typing import Any
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -73,7 +74,7 @@ def _mock_settings() -> MagicMock:
 
 def _collect_text(at: Any) -> str:
     """Collect all rendered text from an AppTest run for assertion."""
-    parts: List[str] = []
+    parts: list[str] = []
     for attr in ("markdown", "header", "subheader", "info", "error", "title", "text", "success", "warning"):
         for el in getattr(at, attr, []):
             parts.append(str(getattr(el, "value", "")))
@@ -252,3 +253,80 @@ class TestDashboardSmoke:
         )
         text = _collect_text(at)
         assert "evaluation" in text.lower() or "panel" in text.lower()
+
+    @pytest.mark.e2e
+    def test_thinkpad_evaluation_page_renders_missing_report(self) -> None:
+        """ThinkPad Evaluation page handles a missing local report."""
+        from streamlit.testing.v1 import AppTest
+
+        def page_script():
+            from src.observability.dashboard.pages import thinkpad_evaluation
+
+            thinkpad_evaluation.DEFAULT_REPORT_PATH = "data/eval/missing_m6_report.json"
+            thinkpad_evaluation.render()
+
+        at = AppTest.from_function(page_script, default_timeout=10)
+        at.run()
+
+        assert not at.exception, (
+            f"ThinkPad Evaluation page raised an exception: {at.exception}"
+        )
+        text = _collect_text(at)
+        assert "thinkpad evaluation" in text.lower()
+        assert "no thinkpad evaluation report" in text.lower()
+
+    @pytest.mark.e2e
+    def test_thinkpad_evaluation_page_renders_synthetic_report(self) -> None:
+        """ThinkPad Evaluation page renders a synthetic M6 report."""
+        from streamlit.testing.v1 import AppTest
+
+        report_path = Path("data/eval/dashboard_smoke_m6_report.json")
+        report_path.parent.mkdir(parents=True, exist_ok=True)
+        report_path.write_text(
+            json.dumps(
+                {
+                    "version": "m6",
+                    "collection": "thinkpad_m4",
+                    "query_count": 1,
+                    "aggregate_metrics": {"tool_status_accuracy": 1.0},
+                    "category_metrics": {
+                        "model_resolution": {"tool_status_accuracy": 1.0}
+                    },
+                    "case_results": [
+                        {
+                            "case_id": "case_1",
+                            "category": "model_resolution",
+                            "tool": "resolve_thinkpad_model",
+                            "expected_status": "ok",
+                            "actual_status": "ok",
+                            "passed": True,
+                            "skipped": False,
+                            "failure_reasons": [],
+                        }
+                    ],
+                    "environment": {
+                        "manual_count": 8,
+                        "skipped_case_count": 0,
+                        "failed_case_count": 0,
+                        "live_retrieval_available": False,
+                    },
+                }
+            ),
+            encoding="utf-8",
+        )
+
+        def page_script():
+            from src.observability.dashboard.pages import thinkpad_evaluation
+
+            thinkpad_evaluation.DEFAULT_REPORT_PATH = "data/eval/dashboard_smoke_m6_report.json"
+            thinkpad_evaluation.render()
+
+        at = AppTest.from_function(page_script, default_timeout=10)
+        at.run()
+
+        assert not at.exception, (
+            f"ThinkPad Evaluation synthetic report raised an exception: {at.exception}"
+        )
+        text = _collect_text(at)
+        assert "aggregate metrics" in text.lower()
+        assert "failed or skipped cases" in text.lower()

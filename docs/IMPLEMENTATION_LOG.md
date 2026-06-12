@@ -711,3 +711,125 @@ ThinkPadToolService.get_safety_warnings(model, component=None, top_k=5)
 ### Handoff
 
 Proceed to M6 evaluation/dashboard work: create a small golden tool/retrieval set, measure exact lookup and citation accuracy, run a live limited `thinkpad_m4` index when credentials are explicitly available, and only then consider answer generation or Graph RAG traversal.
+
+---
+
+## M6: ThinkPad Evaluation Baseline + Lightweight Dashboard
+
+- Date: 2026-06-12
+- User goal: Implement the M6 eval-first plan by adding a ThinkPad-specific golden set, deterministic evaluation runner, live retrieval baseline, and a lightweight dashboard report viewer.
+- Scope included: committed 30-case golden set, evaluation dataclasses/API, CLI, dashboard viewer, unit tests, dashboard smoke tests, structured baseline run, live DashScope retrieval baseline run, docs, implementation log, private interview notes.
+- Scope excluded: generated repair answers, Ragas faithfulness, Graph RAG traversal, Agent workflow, new HMM downloads, committed evaluation reports, committed provider outputs, committed `data/`, committed `docs/INTERVIEW_NOTES.md`.
+
+### File-Level Changes
+
+| Change | Path | Implementation Fact |
+|---|---|---|
+| Added | `src/thinkpad/evaluation.py` | Added `ThinkPadGoldenCase`, `ThinkPadEvalResult`, `ThinkPadEvalReport`, golden set loader, evaluator, deterministic metrics, skipped live retrieval handling, and report serialization. |
+| Modified | `src/thinkpad/__init__.py` | Exported M6 evaluation dataclasses and functions. |
+| Added | `scripts/thinkpad_evaluate.py` | Added CLI for M6 structured and live retrieval evaluation with optional `--require-live-retrieval` and `--output`. |
+| Added | `tests/fixtures/thinkpad_m6_golden_set.json` | Added 30 copyright-light ThinkPad cases covering resolver, exact tools, FRU, diagram, safety, negatives, and live retrieval. |
+| Added | `tests/thinkpad/test_evaluation.py` | Added tests for golden set validation, duplicate IDs, invalid schema, rank metrics, citation metrics, live retrieval skip behavior, clarification scoring, and JSON-safe report serialization. |
+| Added | `src/observability/dashboard/pages/thinkpad_evaluation.py` | Added read-only Streamlit page for viewing local M6 evaluation reports. |
+| Modified | `src/observability/dashboard/app.py` | Registered the new ThinkPad Evaluation page in dashboard navigation. |
+| Modified | `tests/e2e/test_dashboard_smoke.py` | Added missing-report and synthetic-report smoke tests for the ThinkPad Evaluation page; updated old `List` typing import while touching the file. |
+| Modified | `docs/DEV_SPEC_THINKPAD.md` | Added M6 golden set, API, CLI, metrics, dashboard, and known baseline finding. |
+| Modified | `docs/EVAL_REPORT.md` | Added structured and live M6 baseline metrics and the failed screw normalization case. |
+| Modified | `docs/EXPERIMENTS.md` | Added M6 golden set, structured evaluation, live retrieval evaluation, and dashboard smoke records. |
+| Modified | `docs/IMPLEMENTATION_LOG.md` | Added this M6 implementation fact record. |
+| Modified locally, not committed | `docs/INTERVIEW_NOTES.md` | Added M6 interview-preparation notes; remains private and excluded from Git. |
+
+### Golden Set And Metrics
+
+The committed M6 fixture has 30 cases:
+
+- inventory: 1
+- model resolution: 4
+- model ambiguity: 4
+- negative: 4
+- error code: 3
+- screw spec: 3
+- FRU procedure: 3
+- diagram: 2
+- safety: 2
+- live retrieval: 4
+
+M6 metrics:
+
+- `tool_status_accuracy`
+- `clarification_accuracy`
+- `manual_hit_at_k`
+- `manual_mrr`
+- `record_type_hit_at_k`
+- `record_type_mrr`
+- `citation_coverage`
+- `citation_accuracy`
+- `identifier_hit_at_k`
+- `empty_unexpected_result_rate`
+- `latency_ms_p50`
+- `latency_ms_p95`
+
+### Scripts And Commands
+
+| Script/Command | Purpose | Result |
+|---|---|---|
+| `.\.venv\Scripts\python scripts\thinkpad_evaluate.py --golden-set tests\fixtures\thinkpad_m6_golden_set.json --manifest data\manifests\manuals_manifest.yaml --extracted-dir data\extracted\m3 --collection thinkpad_m4 --top-k 5 --output data\eval\m6_report_structured.json` | Run structured evaluation without live retrieval. | Passed; 30 cases loaded, 26 evaluated, 4 live retrieval cases skipped, 1 evaluated failure. |
+| `.\.venv\Scripts\python scripts\thinkpad_evaluate.py --golden-set tests\fixtures\thinkpad_m6_golden_set.json --manifest data\manifests\manuals_manifest.yaml --extracted-dir data\extracted\m3 --collection thinkpad_m4 --top-k 5 --require-live-retrieval --output data\eval\m6_report.json` | Run full M6 evaluation with live DashScope retrieval. | Passed; 30 cases evaluated, 0 skipped, 1 failure. |
+| `.\.venv\Scripts\python -m pytest tests\thinkpad\test_evaluation.py -q` | Run M6 evaluator unit tests. | Passed, 9 tests. |
+| `.\.venv\Scripts\python -m pytest tests\e2e\test_dashboard_smoke.py -q` | Run dashboard smoke including ThinkPad Evaluation page. | Passed, 8 tests. |
+| `.\.venv\Scripts\python -m pytest tests\thinkpad -q` | Run all ThinkPad tests. | Passed, 66 tests. |
+| `.\.venv\Scripts\python -m pytest tests\unit\test_smoke_imports.py -q` | Run upstream smoke imports. | Passed, 22 tests. |
+| `.\.venv\Scripts\ruff check src\thinkpad scripts\thinkpad_*.py tests\thinkpad src\observability\dashboard\pages\thinkpad_evaluation.py tests\e2e\test_dashboard_smoke.py` | Lint M6 scope and touched dashboard smoke test. | Passed. |
+| `git diff --check` | Whitespace check. | Passed; Git printed Windows CRLF conversion warnings only. |
+
+Local pytest commands used `TEMP` and `TMP` pointed at `.pytest_tmp` because the default Windows pytest temp root returned `WinError 5` in this session. `.pytest_tmp` is a local generated directory and is not part of the committed project state.
+
+### Baseline Results
+
+Structured run:
+
+| Metric | Value |
+|---|---:|
+| Evaluated cases | 26 |
+| Skipped live retrieval cases | 4 |
+| Failed evaluated cases | 1 |
+| `tool_status_accuracy` | 0.9615 |
+| `manual_hit_at_k` | 0.9444 |
+| `manual_mrr` | 0.9000 |
+| `record_type_hit_at_k` | 0.9231 |
+| `citation_accuracy` | 0.9231 |
+
+Live run:
+
+| Metric | Value |
+|---|---:|
+| Evaluated cases | 30 |
+| Skipped cases | 0 |
+| Failed cases | 1 |
+| Passed case rate | 0.9667 |
+| `tool_status_accuracy` | 0.9667 |
+| `manual_hit_at_k` | 0.9500 |
+| `manual_mrr` | 0.9100 |
+| `record_type_hit_at_k` | 0.9286 |
+| `citation_accuracy` | 0.9375 |
+| `latency_ms_p95` | 1445.8 |
+
+### Known Failure
+
+`m6_screw_t480_exact_size` expected an exact screw-spec hit for `M2 x 3`, but `get_screw_spec` returned `not_found`.
+
+Interpretation:
+
+- The extracted HMM row uses the multiplication sign `×`.
+- The user-style query uses ASCII `x`.
+- Current exact structured lookup does not normalize these equivalent screw-size forms.
+
+This is a real M6 finding and should be fixed as a follow-up rather than hidden by loosening the golden set.
+
+### Risks And Handoff
+
+- M6 evaluates evidence quality, not generated answer quality.
+- Local reports under `data/eval/` are ignored and not portable through Git.
+- The dashboard page is intentionally read-only and does not replace CLI evaluation.
+- M6 exposes one exact lookup normalization gap; a targeted follow-up should normalize screw specs before M7 Graph RAG.
+- M7 should only proceed after deciding whether to fix the screw normalization gap first or carry it as a known evaluation baseline failure.

@@ -444,3 +444,67 @@ M5 proves that ThinkPad-specific MCP tool contracts and JSON evidence responses 
 - Run a live limited DashScope index only with `DASHSCOPE_API_KEY` set in the local shell.
 - Add dashboard or trace views for ThinkPad tool calls if useful.
 - Keep final answer generation gated until evidence quality is measured.
+
+## 16. M6 Evaluation Baseline
+
+M6 adds a ThinkPad-specific evaluation path over M5 evidence tools. It does not generate natural-language repair answers, run Ragas, build Graph RAG, or change MCP tool names.
+
+Golden set:
+
+- Canonical committed fixture: `tests/fixtures/thinkpad_m6_golden_set.json`.
+- The fixture contains 30 copyright-light cases.
+- Cases describe tool inputs and expected structure only: status, clarification flag, manual IDs, record types, identifiers, page/citation requirements, and category.
+- The fixture must not include Lenovo manual passages, extracted full text, image dumps, vector records, or provider output.
+
+Evaluation API:
+
+```python
+load_thinkpad_golden_set(path) -> list[ThinkPadGoldenCase]
+evaluate_thinkpad_cases(cases, service, collection="thinkpad_m4", top_k=5) -> ThinkPadEvalReport
+ThinkPadEvalReport.to_dict() -> dict
+```
+
+CLI:
+
+```powershell
+.\.venv\Scripts\python scripts\thinkpad_evaluate.py `
+  --golden-set tests\fixtures\thinkpad_m6_golden_set.json `
+  --manifest data\manifests\manuals_manifest.yaml `
+  --extracted-dir data\extracted\m3 `
+  --collection thinkpad_m4 `
+  --top-k 5 `
+  --output data\eval\m6_report.json
+```
+
+Live retrieval:
+
+- Retrieval cases call `query_thinkpad_service`.
+- Without `DASHSCOPE_API_KEY`, retrieval cases are skipped by default and structured tool cases continue.
+- With `--require-live-retrieval`, missing live retrieval credentials or provider/index failures should fail the command.
+- Live reports are local artifacts under ignored `data/eval/` and are not committed.
+
+Metrics:
+
+- `tool_status_accuracy`
+- `clarification_accuracy`
+- `manual_hit_at_k`
+- `manual_mrr`
+- `record_type_hit_at_k`
+- `record_type_mrr`
+- `citation_coverage`
+- `citation_accuracy`
+- `identifier_hit_at_k`
+- `empty_unexpected_result_rate`
+- `latency_ms_p50`
+- `latency_ms_p95`
+
+Dashboard:
+
+- The ThinkPad Evaluation dashboard page is read-only.
+- It reads `data/eval/m6_report.json` by default.
+- It must not trigger provider calls, rebuild indexes, write reports, or generate answers.
+
+Known M6 baseline finding:
+
+- T480 screw exact lookup with ASCII `x` does not match extracted screw rows that use the multiplication sign `×`.
+- This should be treated as a normalization/rerank follow-up, not hidden by changing the golden expectation.

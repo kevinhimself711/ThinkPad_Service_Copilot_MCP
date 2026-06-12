@@ -1,0 +1,357 @@
+{
+  "description": "M6 ThinkPad golden set for model resolution, structured MCP tools, citation checks, and live retrieval smoke. It intentionally avoids Lenovo manual text.",
+  "version": "m6.0",
+  "test_cases": [
+    {
+      "case_id": "m6_supported_models_inventory",
+      "category": "inventory",
+      "tool": "list_supported_models",
+      "input": {"include_machine_types": true},
+      "expected": {
+        "status": "ok",
+        "manual_ids": ["thinkpad_x1_carbon_gen9_x1_yoga_gen6_hmm"],
+        "identifiers": ["20XW"]
+      }
+    },
+    {
+      "case_id": "m6_resolve_x1_carbon_ambiguous",
+      "category": "model_ambiguity",
+      "tool": "resolve_thinkpad_model",
+      "input": {"query": "X1 Carbon battery removal"},
+      "expected": {
+        "status": "clarification_required",
+        "clarification_needed": true,
+        "identifiers": ["generation_required"]
+      }
+    },
+    {
+      "case_id": "m6_resolve_21cb_machine_type",
+      "category": "model_resolution",
+      "tool": "resolve_thinkpad_model",
+      "input": {"query": "21CB battery removal"},
+      "expected": {
+        "status": "ok",
+        "clarification_needed": false,
+        "manual_ids": ["thinkpad_x1_carbon_gen10_x1_yoga_gen7_hmm"],
+        "identifiers": ["21CB"]
+      }
+    },
+    {
+      "case_id": "m6_resolve_20xw_machine_type",
+      "category": "model_resolution",
+      "tool": "resolve_thinkpad_model",
+      "input": {"query": "20XW fan removal"},
+      "expected": {
+        "status": "ok",
+        "clarification_needed": false,
+        "manual_ids": ["thinkpad_x1_carbon_gen9_x1_yoga_gen6_hmm"],
+        "identifiers": ["20XW"]
+      }
+    },
+    {
+      "case_id": "m6_resolve_t14_gen2_alias",
+      "category": "model_resolution",
+      "tool": "resolve_thinkpad_model",
+      "input": {"query": "T14 Gen2 system board"},
+      "expected": {
+        "status": "ok",
+        "clarification_needed": false,
+        "manual_ids": ["thinkpad_t14_gen2_p14s_gen2_hmm"]
+      }
+    },
+    {
+      "case_id": "m6_resolve_e15_second_gen",
+      "category": "model_resolution",
+      "tool": "resolve_thinkpad_model",
+      "input": {"query": "E15 second gen fan"},
+      "expected": {
+        "status": "ok",
+        "clarification_needed": false,
+        "manual_ids": ["thinkpad_e14_gen2_e15_gen2_hmm"]
+      }
+    },
+    {
+      "case_id": "m6_resolve_unsupported_ideapad",
+      "category": "negative",
+      "tool": "resolve_thinkpad_model",
+      "input": {"query": "IdeaPad Slim 5 battery removal"},
+      "expected": {
+        "status": "clarification_required",
+        "clarification_needed": true,
+        "identifiers": ["unsupported_model"]
+      }
+    },
+    {
+      "case_id": "m6_error_0177_lookup",
+      "category": "error_code",
+      "tool": "lookup_error_code",
+      "input": {"error_code": "0177", "model": "T14 Gen 2"},
+      "expected": {
+        "status": "ok",
+        "manual_ids": ["thinkpad_t14_gen2_p14s_gen2_hmm"],
+        "record_types": ["table"],
+        "identifiers": ["0177"],
+        "citation_required": true,
+        "pages": [40]
+      }
+    },
+    {
+      "case_id": "m6_error_0183_lookup",
+      "category": "error_code",
+      "tool": "lookup_error_code",
+      "input": {"error_code": "0183", "model": "T14 Gen 2"},
+      "expected": {
+        "status": "ok",
+        "manual_ids": ["thinkpad_t14_gen2_p14s_gen2_hmm"],
+        "record_types": ["table"],
+        "identifiers": ["0183"],
+        "citation_required": true,
+        "pages": [40]
+      }
+    },
+    {
+      "case_id": "m6_error_0187_lookup",
+      "category": "error_code",
+      "tool": "lookup_error_code",
+      "input": {"error_code": "0187", "model": "T14 Gen 2"},
+      "expected": {
+        "status": "ok",
+        "manual_ids": ["thinkpad_t14_gen2_p14s_gen2_hmm"],
+        "record_types": ["table"],
+        "identifiers": ["0187"],
+        "citation_required": true,
+        "pages": [40]
+      }
+    },
+    {
+      "case_id": "m6_error_unknown_not_found",
+      "category": "negative",
+      "tool": "lookup_error_code",
+      "input": {"error_code": "9999", "model": "T14 Gen 2"},
+      "expected": {
+        "status": "not_found"
+      }
+    },
+    {
+      "case_id": "m6_screw_t14_gen3_battery",
+      "category": "screw_spec",
+      "tool": "get_screw_spec",
+      "input": {"model": "T14 Gen 3", "component_or_screw": "built-in battery"},
+      "expected": {
+        "status": "ok",
+        "manual_ids": ["thinkpad_t14_gen3_p14s_gen3_hmm"],
+        "record_types": ["table"],
+        "identifiers": ["0.18"],
+        "citation_required": true,
+        "pages": [70]
+      }
+    },
+    {
+      "case_id": "m6_screw_t14_gen2_coin_cell",
+      "category": "screw_spec",
+      "tool": "get_screw_spec",
+      "input": {"model": "T14 Gen 2", "component_or_screw": "coin-cell battery"},
+      "expected": {
+        "status": "ok",
+        "manual_ids": ["thinkpad_t14_gen2_p14s_gen2_hmm"],
+        "record_types": ["table"],
+        "identifiers": ["0.18"],
+        "citation_required": true,
+        "pages": [81]
+      }
+    },
+    {
+      "case_id": "m6_screw_t480_exact_size",
+      "category": "screw_spec",
+      "tool": "get_screw_spec",
+      "input": {"model": "T480", "component_or_screw": "M2 x 3"},
+      "expected": {
+        "status": "ok",
+        "manual_ids": ["thinkpad_t480_hmm"],
+        "record_types": ["table"],
+        "identifiers": ["0.181"],
+        "citation_required": true
+      }
+    },
+    {
+      "case_id": "m6_screw_x1_missing_generation",
+      "category": "model_ambiguity",
+      "tool": "get_screw_spec",
+      "input": {"model": "X1 Carbon", "component_or_screw": "battery"},
+      "expected": {
+        "status": "clarification_required",
+        "clarification_needed": true
+      }
+    },
+    {
+      "case_id": "m6_fru_t14_gen2_battery",
+      "category": "fru_procedure",
+      "tool": "get_fru_procedure",
+      "input": {"model": "T14 Gen 2", "component_or_fru": "built-in battery"},
+      "expected": {
+        "status": "ok",
+        "manual_ids": ["thinkpad_t14_gen2_p14s_gen2_hmm"],
+        "record_types": ["fru_procedure"],
+        "identifiers": ["1090"],
+        "citation_required": true,
+        "pages": [82, 83]
+      }
+    },
+    {
+      "case_id": "m6_fru_x1_gen10_battery",
+      "category": "fru_procedure",
+      "tool": "get_fru_procedure",
+      "input": {"model": "21CB", "component_or_fru": "built-in battery"},
+      "expected": {
+        "status": "ok",
+        "manual_ids": ["thinkpad_x1_carbon_gen10_x1_yoga_gen7_hmm"],
+        "record_types": ["fru_procedure"],
+        "identifiers": ["1020"],
+        "citation_required": true
+      }
+    },
+    {
+      "case_id": "m6_fru_e15_gen2_fan",
+      "category": "fru_procedure",
+      "tool": "get_fru_procedure",
+      "input": {"model": "E15 Gen 2", "component_or_fru": "thermal fan"},
+      "expected": {
+        "status": "ok",
+        "manual_ids": ["thinkpad_e14_gen2_e15_gen2_hmm"],
+        "record_types": ["fru_procedure"],
+        "citation_required": true
+      }
+    },
+    {
+      "case_id": "m6_fru_x1_ambiguous",
+      "category": "model_ambiguity",
+      "tool": "get_fru_procedure",
+      "input": {"model": "X1 Carbon", "component_or_fru": "battery"},
+      "expected": {
+        "status": "clarification_required",
+        "clarification_needed": true
+      }
+    },
+    {
+      "case_id": "m6_fru_unknown_component",
+      "category": "negative",
+      "tool": "get_fru_procedure",
+      "input": {"model": "T14 Gen 2", "component_or_fru": "flux capacitor"},
+      "expected": {
+        "status": "not_found"
+      }
+    },
+    {
+      "case_id": "m6_diagram_t14_lcd_unit",
+      "category": "diagram",
+      "tool": "get_related_diagram",
+      "input": {"model": "T14 Gen 2", "component_or_fru": "LCD unit"},
+      "expected": {
+        "status": "ok",
+        "manual_ids": ["thinkpad_t14_gen2_p14s_gen2_hmm"],
+        "record_types": ["figure"],
+        "citation_required": true
+      }
+    },
+    {
+      "case_id": "m6_diagram_x1_gen9_battery",
+      "category": "diagram",
+      "tool": "get_related_diagram",
+      "input": {"model": "X1 Carbon Gen 9", "component_or_fru": "battery"},
+      "expected": {
+        "status": "ok",
+        "manual_ids": ["thinkpad_x1_carbon_gen9_x1_yoga_gen6_hmm"],
+        "record_types": ["figure"],
+        "citation_required": true
+      }
+    },
+    {
+      "case_id": "m6_warning_t14_esd",
+      "category": "safety",
+      "tool": "get_safety_warnings",
+      "input": {"model": "T14 Gen 2", "component": "ESD"},
+      "expected": {
+        "status": "ok",
+        "manual_ids": ["thinkpad_t14_gen2_p14s_gen2_hmm"],
+        "record_types": ["warning"],
+        "identifiers": ["ESD"],
+        "citation_required": true
+      }
+    },
+    {
+      "case_id": "m6_warning_x1_gen10_battery",
+      "category": "safety",
+      "tool": "get_safety_warnings",
+      "input": {"model": "21CB", "component": "battery"},
+      "expected": {
+        "status": "ok",
+        "manual_ids": ["thinkpad_x1_carbon_gen10_x1_yoga_gen7_hmm"],
+        "record_types": ["warning"],
+        "citation_required": true
+      }
+    },
+    {
+      "case_id": "m6_warning_x1_ambiguous",
+      "category": "model_ambiguity",
+      "tool": "get_safety_warnings",
+      "input": {"model": "X1 Carbon", "component": "battery"},
+      "expected": {
+        "status": "clarification_required",
+        "clarification_needed": true
+      }
+    },
+    {
+      "case_id": "m6_warning_unknown_component",
+      "category": "negative",
+      "tool": "get_safety_warnings",
+      "input": {"model": "T14 Gen 2", "component": "liquid nitrogen"},
+      "expected": {
+        "status": "not_found"
+      }
+    },
+    {
+      "case_id": "m6_retrieval_x1_ambiguous_battery",
+      "category": "live_retrieval",
+      "tool": "query_thinkpad_service",
+      "input": {"query": "X1 Carbon battery removal"},
+      "expected": {
+        "status": "clarification_required",
+        "clarification_needed": true
+      }
+    },
+    {
+      "case_id": "m6_retrieval_21cb_battery",
+      "category": "live_retrieval",
+      "tool": "query_thinkpad_service",
+      "input": {"query": "21CB battery removal"},
+      "expected": {
+        "status": "ok",
+        "manual_ids": ["thinkpad_x1_carbon_gen10_x1_yoga_gen7_hmm"],
+        "citation_required": true
+      }
+    },
+    {
+      "case_id": "m6_retrieval_gen9_battery",
+      "category": "live_retrieval",
+      "tool": "query_thinkpad_service",
+      "input": {"query": "X1 Carbon Gen 9 battery removal"},
+      "expected": {
+        "status": "ok",
+        "manual_ids": ["thinkpad_x1_carbon_gen9_x1_yoga_gen6_hmm"],
+        "citation_required": true
+      }
+    },
+    {
+      "case_id": "m6_retrieval_error_0271",
+      "category": "live_retrieval",
+      "tool": "query_thinkpad_service",
+      "input": {"query": "error code 0271"},
+      "expected": {
+        "status": "clarification_required",
+        "record_types": ["table"],
+        "identifiers": ["0271"],
+        "citation_required": true
+      }
+    }
+  ]
+}

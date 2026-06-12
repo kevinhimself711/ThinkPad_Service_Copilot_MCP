@@ -212,3 +212,96 @@ Current smoke observations:
 - Exact error-code and safety queries return structured evidence, but their Hit@K/MRR are still unmeasured.
 
 M6 should convert these smoke findings into a small golden evaluation set with measurable Hit@K, MRR, citation accuracy, model/generation accuracy, record-type accuracy, and safety-warning recall.
+
+## M6 ThinkPad Evaluation Baseline
+
+- Date: 2026-06-12
+- Milestone: M6 Evaluation Baseline + Lightweight Dashboard
+- Golden set: `tests/fixtures/thinkpad_m6_golden_set.json`
+- Cases: 30
+- Scope: M5 evidence tools, structured lookups, model resolution, citation checks, and live retrieval smoke
+- Out of scope: generated repair answers, Ragas faithfulness, Graph RAG traversal, agent trajectories
+
+### Structured Baseline
+
+Command:
+
+```powershell
+.\.venv\Scripts\python scripts\thinkpad_evaluate.py `
+  --golden-set tests\fixtures\thinkpad_m6_golden_set.json `
+  --manifest data\manifests\manuals_manifest.yaml `
+  --extracted-dir data\extracted\m3 `
+  --collection thinkpad_m4 `
+  --top-k 5 `
+  --output data\eval\m6_report_structured.json
+```
+
+Structured run result:
+
+| Metric | Value |
+|---|---:|
+| Query count | 30 |
+| Evaluated cases | 26 |
+| Skipped live retrieval cases | 4 |
+| Failed evaluated cases | 1 |
+| `tool_status_accuracy` | 0.9615 |
+| `manual_hit_at_k` | 0.9444 |
+| `manual_mrr` | 0.9000 |
+| `record_type_hit_at_k` | 0.9231 |
+| `citation_accuracy` | 0.9231 |
+| `identifier_hit_at_k` | 0.9286 |
+
+### Live Retrieval Baseline
+
+Live run used `DASHSCOPE_API_KEY` only from the local shell. The key was not written to repository files.
+
+Command:
+
+```powershell
+$env:DASHSCOPE_API_KEY = "<local only>"
+.\.venv\Scripts\python scripts\thinkpad_evaluate.py `
+  --golden-set tests\fixtures\thinkpad_m6_golden_set.json `
+  --manifest data\manifests\manuals_manifest.yaml `
+  --extracted-dir data\extracted\m3 `
+  --collection thinkpad_m4 `
+  --top-k 5 `
+  --require-live-retrieval `
+  --output data\eval\m6_report.json
+```
+
+Live run result:
+
+| Metric | Value |
+|---|---:|
+| Query count | 30 |
+| Evaluated cases | 30 |
+| Skipped cases | 0 |
+| Failed cases | 1 |
+| Passed case rate | 0.9667 |
+| `tool_status_accuracy` | 0.9667 |
+| `clarification_accuracy` | 1.0000 |
+| `manual_hit_at_k` | 0.9500 |
+| `manual_mrr` | 0.9100 |
+| `record_type_hit_at_k` | 0.9286 |
+| `record_type_mrr` | 0.9286 |
+| `citation_coverage` | 0.9375 |
+| `citation_accuracy` | 0.9375 |
+| `identifier_hit_at_k` | 0.9333 |
+| `empty_unexpected_result_rate` | 0.0000 |
+| `latency_ms_p50` | 0.0 |
+| `latency_ms_p95` | 1445.8 |
+
+Category finding:
+
+- `live_retrieval` passed all 4 live cases with `manual_hit_at_k=1.0`, `manual_mrr=1.0`, `record_type_hit_at_k=1.0`, and `citation_accuracy=1.0`.
+- `screw_spec` had the only failed case.
+
+Failed case:
+
+| Case | Expected | Actual | Interpretation |
+|---|---|---|---|
+| `m6_screw_t480_exact_size` | `ok` screw table hit for `M2 x 3` | `not_found` | The query used ASCII `x`, while extracted PDF text uses the multiplication sign `×`; exact lookup needs screw-spec normalization. |
+
+### Interpretation
+
+M6 proves that ThinkPad evidence tools are measurable with a domain-specific golden set and that live retrieval can be evaluated without answer generation. It also exposes a concrete normalization gap for exact screw-size lookup. The next retrieval-quality work should fix screw-spec normalization and then re-run the same M6 golden set to show before/after movement.

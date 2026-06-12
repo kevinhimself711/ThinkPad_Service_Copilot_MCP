@@ -1,5 +1,12 @@
 """ThinkPad HMM domain utilities for the Service Copilot project."""
 
+from src.thinkpad.evaluation import (
+    ThinkPadEvalReport,
+    ThinkPadEvalResult,
+    ThinkPadGoldenCase,
+    evaluate_thinkpad_cases,
+    load_thinkpad_golden_set,
+)
 from src.thinkpad.extraction import ExtractionOptions, extract_manual_artifacts
 from src.thinkpad.manifest import ManifestError, ManualMetadata, load_manifest
 from src.thinkpad.model_resolver import resolve_thinkpad_model
@@ -36,6 +43,9 @@ __all__ = [
     "ModelResolution",
     "RetrievalIndexBuildResult",
     "TableRecord",
+    "ThinkPadEvalReport",
+    "ThinkPadEvalResult",
+    "ThinkPadGoldenCase",
     "ThinkPadRetrievalChunk",
     "ThinkPadRetrievalResponse",
     "ThinkPadToolService",
@@ -43,8 +53,10 @@ __all__ = [
     "WarningRecord",
     "build_retrieval_chunks",
     "build_thinkpad_retrieval_index",
+    "evaluate_thinkpad_cases",
     "extract_manual_artifacts",
     "load_manifest",
+    "load_thinkpad_golden_set",
     "retrieve_thinkpad",
     "resolve_thinkpad_model",
 ]

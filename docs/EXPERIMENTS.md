@@ -494,3 +494,162 @@ $env:DASHSCOPE_API_KEY = "<local only>"
 | `git diff --check` | Passed; Git printed Windows CRLF conversion warnings only |
 
 - Decision: The live fixes have deterministic regression coverage and do not require live provider calls in default test runs.
+
+## M6-001: ThinkPad Golden Set And Evaluator Unit Tests
+
+- Date: 2026-06-12
+- Hypothesis: ThinkPad tool evidence needs a domain-specific golden set and evaluator rather than upstream chunk-id-only evaluation.
+- Golden set: `tests/fixtures/thinkpad_m6_golden_set.json`
+- Case count: 30
+- Coverage:
+  - model ambiguity
+  - machine type resolution
+  - error code lookup
+  - screw and torque lookup
+  - FRU procedure lookup
+  - diagram metadata lookup
+  - safety warning lookup
+  - negative and unsupported queries
+  - live retrieval smoke
+
+Command:
+
+```powershell
+New-Item -ItemType Directory -Force -Path .pytest_tmp | Out-Null
+$env:TEMP=(Resolve-Path .pytest_tmp)
+$env:TMP=$env:TEMP
+.\.venv\Scripts\python -m pytest tests\thinkpad\test_evaluation.py -q
+```
+
+Result: Passed, 9 tests.
+
+Decision: M6 evaluator tests use synthetic service responses and do not require Lenovo PDFs or provider credentials.
+
+## M6-002: Structured Tool Evaluation Baseline
+
+- Date: 2026-06-12
+- Hypothesis: The M6 evaluator can score structured M5 evidence tools without live provider calls.
+
+Command:
+
+```powershell
+.\.venv\Scripts\python scripts\thinkpad_evaluate.py `
+  --golden-set tests\fixtures\thinkpad_m6_golden_set.json `
+  --manifest data\manifests\manuals_manifest.yaml `
+  --extracted-dir data\extracted\m3 `
+  --collection thinkpad_m4 `
+  --top-k 5 `
+  --output data\eval\m6_report_structured.json
+```
+
+Result: Passed and wrote an ignored local report.
+
+Structured metrics:
+
+| Metric | Value |
+|---|---:|
+| Query count | 30 |
+| Evaluated cases | 26 |
+| Skipped live retrieval cases | 4 |
+| Failed evaluated cases | 1 |
+| `tool_status_accuracy` | 0.9615 |
+| `manual_hit_at_k` | 0.9444 |
+| `manual_mrr` | 0.9000 |
+| `record_type_hit_at_k` | 0.9231 |
+| `citation_accuracy` | 0.9231 |
+
+Failure:
+
+- `m6_screw_t480_exact_size` expected an exact screw table hit for `M2 x 3` but returned `not_found`.
+- Cause: current exact matching does not normalize ASCII `x` to PDF-extracted multiplication sign `×`.
+
+Decision: Keep this failed case as a real baseline finding rather than weakening the golden set.
+
+## M6-003: Live Retrieval Evaluation Baseline
+
+- Date: 2026-06-12
+- Hypothesis: The live `thinkpad_m4` index can pass the M6 retrieval smoke cases through `query_thinkpad_service`.
+- Credential handling: `DASHSCOPE_API_KEY` was supplied only through the shell process and was not written to files.
+
+Command:
+
+```powershell
+$env:DASHSCOPE_API_KEY = "<local only>"
+.\.venv\Scripts\python scripts\thinkpad_evaluate.py `
+  --golden-set tests\fixtures\thinkpad_m6_golden_set.json `
+  --manifest data\manifests\manuals_manifest.yaml `
+  --extracted-dir data\extracted\m3 `
+  --collection thinkpad_m4 `
+  --top-k 5 `
+  --require-live-retrieval `
+  --output data\eval\m6_report.json
+```
+
+Result: Passed and wrote an ignored local report.
+
+Live metrics:
+
+| Metric | Value |
+|---|---:|
+| Query count | 30 |
+| Evaluated cases | 30 |
+| Skipped cases | 0 |
+| Failed cases | 1 |
+| Passed case rate | 0.9667 |
+| `tool_status_accuracy` | 0.9667 |
+| `manual_hit_at_k` | 0.9500 |
+| `manual_mrr` | 0.9100 |
+| `record_type_hit_at_k` | 0.9286 |
+| `citation_accuracy` | 0.9375 |
+| `latency_ms_p95` | 1445.8 |
+
+Live retrieval category:
+
+- 4 live retrieval cases evaluated.
+- `manual_hit_at_k=1.0`
+- `manual_mrr=1.0`
+- `record_type_hit_at_k=1.0`
+- `citation_accuracy=1.0`
+
+Decision: Live retrieval is now measured as a baseline, but M6 still does not evaluate generated repair answers.
+
+## M6-004: Lightweight Dashboard Report Viewer
+
+- Date: 2026-06-12
+- Hypothesis: M6 can add dashboard visibility without triggering provider calls or index writes from the UI.
+- Implementation behavior:
+  - The ThinkPad Evaluation page reads `data/eval/m6_report.json` by default.
+  - Missing report is handled as an informational empty state.
+  - Synthetic report rendering is covered by smoke tests.
+  - The page is read-only and does not run evaluation.
+
+Command:
+
+```powershell
+New-Item -ItemType Directory -Force -Path .pytest_tmp | Out-Null
+$env:TEMP=(Resolve-Path .pytest_tmp)
+$env:TMP=$env:TEMP
+.\.venv\Scripts\python -m pytest tests\e2e\test_dashboard_smoke.py -q
+```
+
+Result: Passed, 8 tests.
+
+Decision: Dashboard work stays intentionally lightweight; evaluation truth remains in the CLI JSON report and `docs/EVAL_REPORT.md`.
+
+## M6-005: Final Local Validation
+
+- Date: 2026-06-12
+- Hypothesis: M6 changes preserve existing ThinkPad tests, smoke imports, dashboard smoke, lint, and whitespace checks.
+- Note: pytest commands set `TEMP` and `TMP` to `.pytest_tmp` because the default Windows pytest temp root returned `WinError 5` in this session.
+
+Commands and results:
+
+| Command | Result |
+|---|---|
+| `.\.venv\Scripts\python -m pytest tests\thinkpad -q` | Passed, 66 tests |
+| `.\.venv\Scripts\python -m pytest tests\unit\test_smoke_imports.py -q` | Passed, 22 tests |
+| `.\.venv\Scripts\python -m pytest tests\e2e\test_dashboard_smoke.py -q` | Passed, 8 tests |
+| `.\.venv\Scripts\ruff check src\thinkpad scripts\thinkpad_*.py tests\thinkpad src\observability\dashboard\pages\thinkpad_evaluation.py tests\e2e\test_dashboard_smoke.py` | Passed |
+| `git diff --check` | Passed; Git printed Windows CRLF conversion warnings only |
+
+Decision: M6 is ready for milestone commit after staging only tracked implementation/docs/test files and excluding local `data/`, drafts, interviews, and private interview notes.
