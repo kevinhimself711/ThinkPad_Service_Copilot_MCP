@@ -8,6 +8,7 @@ from src.thinkpad.evaluation import (
     load_thinkpad_golden_set,
 )
 from src.thinkpad.extraction import ExtractionOptions, extract_manual_artifacts
+from src.thinkpad.fru_graph import FRUDependencyGraph, build_fru_dependency_graph
 from src.thinkpad.manifest import ManifestError, ManualMetadata, load_manifest
 from src.thinkpad.model_resolver import resolve_thinkpad_model
 from src.thinkpad.models import (
@@ -36,6 +37,7 @@ __all__ = [
     "ExtractionResult",
     "FigureRecord",
     "FRUProcedure",
+    "FRUDependencyGraph",
     "HMMPage",
     "ManifestError",
     "ManualMetadata",
@@ -53,6 +55,7 @@ __all__ = [
     "WarningRecord",
     "build_retrieval_chunks",
     "build_thinkpad_retrieval_index",
+    "build_fru_dependency_graph",
     "evaluate_thinkpad_cases",
     "extract_manual_artifacts",
     "load_manifest",

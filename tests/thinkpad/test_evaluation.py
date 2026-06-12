@@ -124,6 +124,45 @@ class _FakeManualsService:
             "metadata": {"collection": collection, "top_k": top_k},
         }
 
+    def get_fru_dependency_chain(
+        self,
+        model: str,
+        component_or_fru: str,
+        max_depth: int = 10,
+    ) -> dict[str, Any]:
+        return {
+            "tool": "get_fru_dependency_chain",
+            "status": "ok",
+            "clarification_needed": False,
+            "message": "",
+            "results": [
+                {
+                    "manual_id": "thinkpad_x1_carbon_gen10_x1_yoga_gen7_hmm",
+                    "record_type": "fru_dependency_chain",
+                    "fru_id": "1020",
+                    "target": {"fru_id": "1020", "fru_name": "Built-in battery"},
+                    "dependency_chain": [{"fru_id": "1010", "fru_name": "Base cover assembly"}],
+                    "citation": {
+                        "manual_id": "thinkpad_x1_carbon_gen10_x1_yoga_gen7_hmm",
+                        "source_url": "https://download.lenovo.com/mock.pdf",
+                        "page_start": 72,
+                        "page_end": 73,
+                        "section_id": "1020",
+                    },
+                }
+            ],
+            "citations": [
+                {
+                    "manual_id": "thinkpad_x1_carbon_gen10_x1_yoga_gen7_hmm",
+                    "source_url": "https://download.lenovo.com/mock.pdf",
+                    "page_start": 72,
+                    "page_end": 73,
+                    "section_id": "1020",
+                }
+            ],
+            "metadata": {"max_depth": max_depth},
+        }
+
 
 def test_load_thinkpad_golden_set_accepts_valid_cases(tmp_path: Path) -> None:
     path = _write_golden(tmp_path / "golden.json", [_case()])
@@ -246,6 +285,39 @@ def test_evaluate_thinkpad_cases_scores_clarification() -> None:
     assert result.passed is True
     assert result.metrics["tool_status_accuracy"] == 1.0
     assert result.metrics["clarification_accuracy"] == 1.0
+    assert result.metrics["identifier_hit_at_k"] == 1.0
+
+
+def test_evaluate_thinkpad_cases_supports_dependency_chain_tool() -> None:
+    cases = [
+        ThinkPadGoldenCase.from_dict(
+            {
+                "case_id": "graph_case",
+                "category": "fru_dependency_chain",
+                "tool": "get_fru_dependency_chain",
+                "input": {
+                    "model": "21CB",
+                    "component_or_fru": "built-in battery",
+                    "max_depth": 10,
+                },
+                "expected": {
+                    "status": "ok",
+                    "manual_ids": ["thinkpad_x1_carbon_gen10_x1_yoga_gen7_hmm"],
+                    "record_types": ["fru_dependency_chain"],
+                    "identifiers": ["1010"],
+                    "citation_required": True,
+                    "pages": [72],
+                },
+            }
+        )
+    ]
+
+    report = evaluate_thinkpad_cases(cases=cases, service=_FakeManualsService())  # type: ignore[arg-type]
+
+    result = report.case_results[0]
+    assert report.version == "m7"
+    assert result.passed is True
+    assert result.metrics["record_type_hit_at_k"] == 1.0
     assert result.metrics["identifier_hit_at_k"] == 1.0
 
 

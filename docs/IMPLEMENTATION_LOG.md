@@ -889,3 +889,74 @@ This is a real M6 finding and should be fixed as a follow-up rather than hidden 
 ### Handoff
 
 After final validation and commit, M7 can proceed to FRU dependency graph planning. Keep M6/M6.1 golden evaluation as a regression suite before and after graph traversal changes.
+
+---
+
+## M7: FRU Dependency Graph + MCP Tool
+
+- Date: 2026-06-12
+- User goal: Implement lightweight FRU dependency graph traversal over M3 `fru_procedures.jsonl` and `dependency_edges.jsonl`, expose it through MCP as `get_fru_dependency_chain`, and extend evaluation without answer generation or Agent workflow.
+- Scope included: standard-library graph layer, tool service dependency-edge loading, MCP schema/handler, M7 golden set, evaluator support, synthetic tests, structured graph evaluation, docs, private interview notes.
+- Scope excluded: graph database, natural-language repair plans, Agent workflow, new HMM downloads, retrieval index changes, committed `data/`, committed `docs/INTERVIEW_NOTES.md`.
+
+### File-Level Changes
+
+| Change | Path | Implementation Fact |
+|---|---|---|
+| Added | `src/thinkpad/fru_graph.py` | Added `FRUDependencyGraph` and `build_fru_dependency_graph()` for deterministic in-memory traversal, missing-node reporting, max-depth truncation, and cycle detection. |
+| Modified | `src/thinkpad/tool_service.py` | Added lazy `dependency_edges` loading and `get_fru_dependency_chain()` backed by model guard, structured FRU lookup, and graph traversal. |
+| Modified | `src/mcp_server/tools/thinkpad_tools.py` | Registered MCP tool `get_fru_dependency_chain` with JSON schema and async handler. |
+| Modified | `src/thinkpad/evaluation.py` | Added evaluator support for `get_fru_dependency_chain` and M7 report versioning when graph cases are present. |
+| Modified | `src/thinkpad/__init__.py` | Exported graph API symbols. |
+| Added | `tests/fixtures/thinkpad_m7_golden_set.json` | Copied M6 cases and added 6 M7 graph cases for battery, system board, exact FRU ID, ambiguity, and negative lookup. |
+| Added | `tests/thinkpad/test_fru_graph.py` | Added graph unit tests for direct chain, multi-hop chain, missing nodes, cycles, and missing target. |
+| Modified | `tests/thinkpad/test_tool_service.py` | Added dependency-edge fixtures and tests for graph evidence, ambiguity, and not-found behavior. |
+| Modified | `tests/thinkpad/test_thinkpad_mcp_tools.py` | Added new tool registration and handler JSON tests. |
+| Modified | `tests/thinkpad/test_evaluation.py` | Added evaluator test for the dependency-chain tool and no-`top_k` injection behavior. |
+| Modified | `tests/integration/test_mcp_server.py` | Added tools/list assertion for `get_fru_dependency_chain`. |
+| Modified | `tests/e2e/test_mcp_client.py` | Added tools/list assertion for `get_fru_dependency_chain`. |
+| Modified | `docs/DEV_SPEC_THINKPAD.md` | Added M7 graph API, MCP tool, behavior, and evaluation contract. |
+| Modified | `docs/EVAL_REPORT.md` | Added M7 structured graph baseline metrics. |
+| Modified | `docs/EXPERIMENTS.md` | Added M7 graph test and structured evaluation records. |
+| Modified | `docs/IMPLEMENTATION_LOG.md` | Added this M7 implementation fact record. |
+| Modified locally, not committed | `docs/INTERVIEW_NOTES.md` | Added M7 interview-preparation questions; remains private and excluded from Git. |
+
+### Scripts And Commands
+
+| Script/Command | Purpose | Result |
+|---|---|---|
+| `.\.venv\Scripts\python -m pytest tests\thinkpad\test_fru_graph.py tests\thinkpad\test_tool_service.py tests\thinkpad\test_thinkpad_mcp_tools.py tests\thinkpad\test_evaluation.py -q` | Focused graph, service, MCP, and evaluator regression tests. | Passed, 34 tests. |
+| `.\.venv\Scripts\python scripts\thinkpad_evaluate.py --golden-set tests\fixtures\thinkpad_m7_golden_set.json --manifest data\manifests\manuals_manifest.yaml --extracted-dir data\extracted\m3 --collection thinkpad_m4 --top-k 5 --output data\eval\m7_report_structured.json` | Run M7 structured golden evaluation against local M3 extraction artifacts. | Passed; 32 evaluated, 4 live retrieval cases skipped, 0 failures. |
+| `.\.venv\Scripts\python -m pytest tests\thinkpad -q` | Run all ThinkPad tests after graph changes. | Passed, 78 tests. |
+| `.\.venv\Scripts\python -m pytest tests\unit\test_smoke_imports.py -q` | Run upstream smoke imports. | Passed, 22 tests. |
+| `.\.venv\Scripts\python -m pytest tests\e2e\test_dashboard_smoke.py -q` | Run dashboard smoke tests. | Passed, 8 tests. |
+| `.\.venv\Scripts\ruff check src\thinkpad src\mcp_server\tools\thinkpad_tools.py tests\thinkpad scripts\thinkpad_*.py` | Lint the M7 implementation scope. | Passed. |
+| `git diff --check` | Check whitespace before staging. | Passed; Git printed Windows CRLF conversion warnings only. |
+| Working diff secret scan for provider-key patterns | Ensure no provider key was written to tracked diff. | Passed. |
+
+### Baseline Results
+
+| Metric | Value |
+|---|---:|
+| Query count | 36 |
+| Evaluated cases | 32 |
+| Skipped live retrieval cases | 4 |
+| Failed evaluated cases | 0 |
+| `tool_status_accuracy` | 1.0000 |
+| `manual_hit_at_k` | 1.0000 |
+| `manual_mrr` | 0.9636 |
+| `record_type_hit_at_k` | 1.0000 |
+| `citation_accuracy` | 1.0000 |
+| `identifier_hit_at_k` | 1.0000 |
+
+### Deviations And Risks
+
+- M7 uses candidate extraction records from M3. It proves graph traversal mechanics, not manually verified completeness of every FRU chain.
+- Graph traversal returns evidence JSON, not ordered technician repair instructions.
+- Cycles and missing nodes are reported in response metadata/results rather than thrown as fatal errors.
+- Live retrieval is not part of M7 graph evaluation; M7 structured graph cases run without provider credentials.
+- Local report `data/eval/m7_report_structured.json` remains ignored and uncommitted.
+
+### Handoff
+
+M8 can build a small repair-planning agent that calls resolver, exact tools, `get_fru_procedure`, `get_fru_dependency_chain`, diagrams, and safety warnings. M8 must separately evaluate generated plan faithfulness and should not treat M7 graph evidence as final prose.

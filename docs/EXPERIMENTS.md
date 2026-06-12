@@ -790,3 +790,94 @@ Commands and results:
 | Working diff secret scan for provider-key patterns | Passed |
 
 Decision: M6.1 is ready for a remediation commit after staging only tracked implementation/docs/test files and excluding local `data/`, drafts, interviews, and private interview notes.
+
+## M7-001: FRU Graph Unit And Tool Tests
+
+- Date: 2026-06-12
+- Hypothesis: M3 FRU procedures and dependency edges can be converted into a deterministic in-memory graph without adding a graph database or third-party dependency.
+
+Code behavior tested:
+
+- Direct prerequisite chain preserves node citation.
+- Multi-hop chain returns deterministic depth ordering.
+- Missing prerequisite nodes are reported.
+- Cycles terminate and set `cycle_detected=true`.
+- `get_fru_dependency_chain` requires an unambiguous model.
+- MCP registration and handler return JSON graph evidence.
+- Evaluator supports `get_fru_dependency_chain` without injecting `top_k`.
+
+Command:
+
+```powershell
+.\.venv\Scripts\python -m pytest `
+  tests\thinkpad\test_fru_graph.py `
+  tests\thinkpad\test_tool_service.py `
+  tests\thinkpad\test_thinkpad_mcp_tools.py `
+  tests\thinkpad\test_evaluation.py -q
+```
+
+Result: Passed, 34 tests.
+
+Decision: Keep M7 graph traversal standard-library only and reuse the existing ThinkPad service/MCP response envelope.
+
+## M7-002: Structured Graph Golden Evaluation
+
+- Date: 2026-06-12
+- Hypothesis: A M7 golden set can preserve all M6 cases and add graph traversal cases without live retrieval as a default requirement.
+
+Command:
+
+```powershell
+.\.venv\Scripts\python scripts\thinkpad_evaluate.py `
+  --golden-set tests\fixtures\thinkpad_m7_golden_set.json `
+  --manifest data\manifests\manuals_manifest.yaml `
+  --extracted-dir data\extracted\m3 `
+  --collection thinkpad_m4 `
+  --top-k 5 `
+  --output data\eval\m7_report_structured.json
+```
+
+Result: Passed and wrote an ignored local report.
+
+Structured metrics:
+
+| Metric | Value |
+|---|---:|
+| Query count | 36 |
+| Evaluated cases | 32 |
+| Skipped live retrieval cases | 4 |
+| Failed evaluated cases | 0 |
+| `tool_status_accuracy` | 1.0000 |
+| `manual_hit_at_k` | 1.0000 |
+| `manual_mrr` | 0.9636 |
+| `record_type_hit_at_k` | 1.0000 |
+| `citation_accuracy` | 1.0000 |
+| `identifier_hit_at_k` | 1.0000 |
+
+Graph category:
+
+- 4 graph `ok` cases evaluated.
+- 1 graph ambiguity case evaluated.
+- 1 graph negative case evaluated.
+- 0 graph failures.
+
+Decision: M7 graph evidence is measurable and can be carried into M8 agent planning as a tool, not as final repair prose.
+
+## M7-003: Final Local Validation
+
+- Date: 2026-06-12
+- Hypothesis: M7 graph changes preserve ThinkPad tests, upstream smoke imports, dashboard smoke, lint, whitespace checks, and provider-secret hygiene.
+- Note: pytest commands set `TEMP` and `TMP` to `.pytest_tmp` because the default Windows pytest temp root returned `WinError 5` earlier in this project session.
+
+Commands and results:
+
+| Command | Result |
+|---|---|
+| `.\.venv\Scripts\python -m pytest tests\thinkpad -q` | Passed, 78 tests |
+| `.\.venv\Scripts\python -m pytest tests\unit\test_smoke_imports.py -q` | Passed, 22 tests |
+| `.\.venv\Scripts\python -m pytest tests\e2e\test_dashboard_smoke.py -q` | Passed, 8 tests |
+| `.\.venv\Scripts\ruff check src\thinkpad src\mcp_server\tools\thinkpad_tools.py tests\thinkpad scripts\thinkpad_*.py` | Passed |
+| `git diff --check` | Passed; Git printed Windows CRLF conversion warnings only |
+| Working diff secret scan for provider-key patterns | Passed |
+
+Decision: M7 is ready for milestone commit after staging only tracked implementation/docs/test files plus new graph module, M7 fixture, and graph tests; local `data/`, drafts, interviews, and private interview notes stay uncommitted.

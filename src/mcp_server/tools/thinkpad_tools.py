@@ -23,6 +23,7 @@ RESOLVE_THINKPAD_MODEL = "resolve_thinkpad_model"
 QUERY_THINKPAD_SERVICE = "query_thinkpad_service"
 LOOKUP_ERROR_CODE = "lookup_error_code"
 GET_FRU_PROCEDURE = "get_fru_procedure"
+GET_FRU_DEPENDENCY_CHAIN = "get_fru_dependency_chain"
 GET_SCREW_SPEC = "get_screw_spec"
 GET_RELATED_DIAGRAM = "get_related_diagram"
 GET_SAFETY_WARNINGS = "get_safety_warnings"
@@ -106,6 +107,26 @@ TOOL_DEFINITIONS: dict[str, dict[str, Any]] = {
                     "description": "Component name or FRU procedure ID.",
                 },
                 "top_k": {"type": "integer", "default": 5, "minimum": 1, "maximum": 20},
+            },
+            required=["model", "component_or_fru"],
+        ),
+    },
+    GET_FRU_DEPENDENCY_CHAIN: {
+        "description": "Return cited recursive FRU prerequisite evidence for an unambiguous ThinkPad model.",
+        "input_schema": _schema(
+            {
+                "model": {"type": "string", "description": "Model/generation or machine type."},
+                "component_or_fru": {
+                    "type": "string",
+                    "description": "Component name or FRU procedure ID.",
+                },
+                "max_depth": {
+                    "type": "integer",
+                    "description": "Maximum recursive prerequisite depth.",
+                    "default": 10,
+                    "minimum": 1,
+                    "maximum": 50,
+                },
             },
             required=["model", "component_or_fru"],
         ),
@@ -258,6 +279,19 @@ async def get_fru_procedure_handler(
     )
 
 
+async def get_fru_dependency_chain_handler(
+    model: str,
+    component_or_fru: str,
+    max_depth: int = 10,
+) -> types.CallToolResult:
+    return await _call(
+        get_tool_service().get_fru_dependency_chain,
+        model=model,
+        component_or_fru=component_or_fru,
+        max_depth=max_depth,
+    )
+
+
 async def get_screw_spec_handler(
     model: str,
     component_or_screw: str,
@@ -305,6 +339,7 @@ HANDLERS: dict[str, Callable[..., Awaitable[types.CallToolResult]]] = {
     QUERY_THINKPAD_SERVICE: query_thinkpad_service_handler,
     LOOKUP_ERROR_CODE: lookup_error_code_handler,
     GET_FRU_PROCEDURE: get_fru_procedure_handler,
+    GET_FRU_DEPENDENCY_CHAIN: get_fru_dependency_chain_handler,
     GET_SCREW_SPEC: get_screw_spec_handler,
     GET_RELATED_DIAGRAM: get_related_diagram_handler,
     GET_SAFETY_WARNINGS: get_safety_warnings_handler,

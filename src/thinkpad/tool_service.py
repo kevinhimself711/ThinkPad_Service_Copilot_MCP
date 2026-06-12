@@ -14,6 +14,7 @@ from pathlib import Path
 from typing import Any
 
 from src.core.settings import REPO_ROOT, Settings, load_settings, resolve_path
+from src.thinkpad.fru_graph import build_fru_dependency_graph
 from src.thinkpad.manifest import ManualMetadata, load_manifest
 from src.thinkpad.model_resolver import resolve_thinkpad_model as resolve_model
 from src.thinkpad.retrieval import retrieve_thinkpad
@@ -37,6 +38,7 @@ class ThinkPadToolService:
         manuals: list[ManualMetadata] | None = None,
         tables: list[dict[str, Any]] | None = None,
         fru_procedures: list[dict[str, Any]] | None = None,
+        dependency_edges: list[dict[str, Any]] | None = None,
         figures: list[dict[str, Any]] | None = None,
         warnings: list[dict[str, Any]] | None = None,
         retriever: Retriever | None = None,
@@ -47,6 +49,7 @@ class ThinkPadToolService:
         self._manuals = list(manuals) if manuals is not None else None
         self._tables = list(tables) if tables is not None else None
         self._fru_procedures = list(fru_procedures) if fru_procedures is not None else None
+        self._dependency_edges = list(dependency_edges) if dependency_edges is not None else None
         self._figures = list(figures) if figures is not None else None
         self._warnings = list(warnings) if warnings is not None else None
         self._retriever = retriever or retrieve_thinkpad
@@ -82,6 +85,14 @@ class ThinkPadToolService:
         if self._fru_procedures is None:
             self._fru_procedures = _read_jsonl(self.extracted_dir / "fru_procedures.jsonl")
         return self._fru_procedures
+
+    @property
+    def dependency_edges(self) -> list[dict[str, Any]]:
+        """Return structured FRU dependency edges from M3 JSONL."""
+
+        if self._dependency_edges is None:
+            self._dependency_edges = _read_jsonl(self.extracted_dir / "dependency_edges.jsonl")
+        return self._dependency_edges
 
     @property
     def figures(self) -> list[dict[str, Any]]:
@@ -279,6 +290,76 @@ class ThinkPadToolService:
             results=results,
             model_resolution=guard["model_resolution"],
             not_found_message=f"No structured FRU procedure found for {query}.",
+        )
+
+    def get_fru_dependency_chain(
+        self,
+        model: str,
+        component_or_fru: str,
+        max_depth: int = 10,
+    ) -> ToolResponse:
+        """Return cited recursive FRU prerequisites for an unambiguous model."""
+
+        if not component_or_fru or not component_or_fru.strip():
+            return _error("get_fru_dependency_chain", "component_or_fru cannot be empty")
+        if max_depth < 1:
+            return _error("get_fru_dependency_chain", "max_depth must be >= 1")
+
+        guard = self._model_guard("get_fru_dependency_chain", model, required=True)
+        if guard["response"] is not None:
+            return guard["response"]
+
+        query = component_or_fru.strip()
+        candidates = [
+            record
+            for record in self.fru_procedures
+            if _manual_allowed(record, guard["allowed_manual_ids"])
+            and _contains_text(_record_text(record), query)
+        ]
+        candidates.sort(key=lambda record: _fru_rank(record, query))
+        if not candidates:
+            return _response(
+                tool="get_fru_dependency_chain",
+                status="not_found",
+                message=f"No structured FRU procedure found for {query}.",
+                model_resolution=guard["model_resolution"],
+            )
+
+        target = candidates[0]
+        graph = build_fru_dependency_graph(
+            procedures=self.fru_procedures,
+            dependency_edges=self.dependency_edges,
+            manual_ids=guard["allowed_manual_ids"],
+        )
+        graph_result = graph.get_dependency_chain(
+            manual_id=str(target.get("manual_id") or ""),
+            fru_id=str(target.get("fru_id") or ""),
+            max_depth=max_depth,
+        )
+        if not graph_result.get("found"):
+            return _response(
+                tool="get_fru_dependency_chain",
+                status="not_found",
+                message=f"No dependency graph node found for {query}.",
+                model_resolution=guard["model_resolution"],
+                metadata={"max_depth": max_depth},
+            )
+
+        result = _fru_dependency_chain_result(graph_result)
+        return _response(
+            tool="get_fru_dependency_chain",
+            status="ok",
+            message="1 cited FRU dependency chain found.",
+            model_resolution=guard["model_resolution"],
+            results=[result],
+            citations=_citations_from_graph_result(result),
+            metadata={
+                "max_depth": max_depth,
+                "edge_count": graph_result.get("edge_count", 0),
+                "missing_prerequisite_count": len(graph_result.get("missing_prerequisites") or []),
+                "cycle_detected": bool(graph_result.get("cycle_detected")),
+                "truncated": bool(graph_result.get("truncated")),
+            },
         )
 
     def get_related_diagram(
@@ -513,6 +594,25 @@ def _fru_result(record: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def _fru_dependency_chain_result(graph_result: dict[str, Any]) -> dict[str, Any]:
+    target = graph_result.get("target") or {}
+    return {
+        "manual_id": graph_result.get("manual_id"),
+        "record_type": "fru_dependency_chain",
+        "fru_id": target.get("fru_id"),
+        "fru_name": target.get("fru_name"),
+        "target": target,
+        "dependency_chain": graph_result.get("dependency_chain") or [],
+        "edge_count": graph_result.get("edge_count", 0),
+        "missing_prerequisites": graph_result.get("missing_prerequisites") or [],
+        "cycle_detected": bool(graph_result.get("cycle_detected")),
+        "cycles": graph_result.get("cycles") or [],
+        "truncated": bool(graph_result.get("truncated")),
+        "max_depth": graph_result.get("max_depth"),
+        "citation": target.get("citation") or {},
+    }
+
+
 def _figure_result(record: dict[str, Any]) -> dict[str, Any]:
     return {
         "image_id": record.get("image_id"),
@@ -538,6 +638,15 @@ def _warning_result(record: dict[str, Any]) -> dict[str, Any]:
         "related_component": record.get("related_component"),
         "citation": _citation_for(record),
     }
+
+
+def _citations_from_graph_result(result: dict[str, Any]) -> list[dict[str, Any]]:
+    records = [result.get("target") or {}]
+    records.extend(result.get("dependency_chain") or [])
+    records.extend(result.get("missing_prerequisites") or [])
+    for cycle in result.get("cycles") or []:
+        records.append(cycle)
+    return _citations_from_results([record for record in records if isinstance(record, dict)])
 
 
 def _manual_allowed(record: dict[str, Any], allowed_manual_ids: set[str] | None) -> bool:

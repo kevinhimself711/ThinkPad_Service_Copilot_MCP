@@ -340,3 +340,63 @@ M6.1 live retrieval also reported `identifier_hit_at_k=1.0000`, `citation_covera
 ### Decision
 
 M6.1 closes the only M6 golden-set failure without weakening the evaluation target. M7 can proceed to FRU dependency graph work, but should keep using the M6/M6.1 golden set as a regression suite.
+
+## M7 FRU Dependency Graph Baseline
+
+- Date: 2026-06-12
+- Milestone: M7 FRU Dependency Graph + `get_fru_dependency_chain`
+- Golden set: `tests/fixtures/thinkpad_m7_golden_set.json`
+- Cases: 36
+- Added graph cases: 6
+- Scope: structured FRU dependency graph traversal and MCP evidence output
+- Out of scope: natural-language repair plans, Agent workflow, live retrieval tuning, new HMM download, graph database
+
+### Structured Evaluation
+
+Command:
+
+```powershell
+.\.venv\Scripts\python scripts\thinkpad_evaluate.py `
+  --golden-set tests\fixtures\thinkpad_m7_golden_set.json `
+  --manifest data\manifests\manuals_manifest.yaml `
+  --extracted-dir data\extracted\m3 `
+  --collection thinkpad_m4 `
+  --top-k 5 `
+  --output data\eval\m7_report_structured.json
+```
+
+Structured run result:
+
+| Metric | Value |
+|---|---:|
+| Query count | 36 |
+| Evaluated cases | 32 |
+| Skipped live retrieval cases | 4 |
+| Failed evaluated cases | 0 |
+| `tool_status_accuracy` | 1.0000 |
+| `manual_hit_at_k` | 1.0000 |
+| `manual_mrr` | 0.9636 |
+| `record_type_hit_at_k` | 1.0000 |
+| `record_type_mrr` | 1.0000 |
+| `citation_coverage` | 1.0000 |
+| `citation_accuracy` | 1.0000 |
+| `identifier_hit_at_k` | 1.0000 |
+
+Graph category result:
+
+| Metric | Value |
+|---|---:|
+| Graph `ok` cases | 4 |
+| Graph ambiguity cases | 1 |
+| Graph negative cases | 1 |
+| Failed graph cases | 0 |
+| `manual_hit_at_k` | 1.0000 |
+| `record_type_hit_at_k` | 1.0000 |
+| `citation_accuracy` | 1.0000 |
+| `identifier_hit_at_k` | 1.0000 |
+
+### Interpretation
+
+M7 proves that M3 dependency edges can be traversed as structured graph evidence and exposed through MCP without LLM calls or live retrieval. The graph tool returns cited prerequisite chains, missing-node metadata, and cycle flags; it does not produce final technician instructions.
+
+M8 can now use `get_fru_dependency_chain` as one evidence tool inside a repair-planning agent, but generated plan faithfulness still needs separate evaluation.

@@ -56,6 +56,17 @@ def _service() -> ThinkPadToolService:
         ],
         fru_procedures=[
             {
+                "procedure_id": "gen9_1010",
+                "manual_id": GEN9_MANUAL,
+                "fru_id": "1010",
+                "fru_name": "Base cover assembly",
+                "steps": ["Remove the base cover screws.", "Lift the base cover."],
+                "prerequisites": [],
+                "warnings": [],
+                "related_image_ids": ["fig_base"],
+                "citation": _citation(67, "1010"),
+            },
+            {
                 "procedure_id": "gen9_1050",
                 "manual_id": GEN9_MANUAL,
                 "fru_id": "1050",
@@ -64,6 +75,15 @@ def _service() -> ThinkPadToolService:
                 "prerequisites": ["1010"],
                 "warnings": [],
                 "related_image_ids": ["fig_battery"],
+                "citation": _citation(70, "1050"),
+            }
+        ],
+        dependency_edges=[
+            {
+                "manual_id": GEN9_MANUAL,
+                "source_fru_id": "1050",
+                "required_fru_id": "1010",
+                "relation_type": "FRU_REQUIRES_PREREQUISITE_FRU",
                 "citation": _citation(70, "1050"),
             }
         ],
@@ -166,6 +186,35 @@ def test_get_fru_procedure_requires_unambiguous_model() -> None:
     assert exact["status"] == "ok"
     assert exact["results"][0]["fru_id"] == "1050"
     assert exact["results"][0]["prerequisites"] == ["1010"]
+
+
+def test_get_fru_dependency_chain_returns_cited_graph_evidence() -> None:
+    response = _service().get_fru_dependency_chain("X1 Carbon Gen 9", "battery")
+
+    assert response["status"] == "ok"
+    result = response["results"][0]
+    assert result["record_type"] == "fru_dependency_chain"
+    assert result["fru_id"] == "1050"
+    assert result["dependency_chain"][0]["fru_id"] == "1010"
+    assert result["dependency_chain"][0]["depth"] == 1
+    assert result["edge_count"] == 1
+    assert response["metadata"]["cycle_detected"] is False
+    assert response["citations"][0]["manual_id"] == GEN9_MANUAL
+
+
+def test_get_fru_dependency_chain_requires_unambiguous_model() -> None:
+    response = _service().get_fru_dependency_chain("X1 Carbon", "battery")
+
+    assert response["status"] == "clarification_required"
+    assert response["clarification_needed"] is True
+    assert response["results"] == []
+
+
+def test_get_fru_dependency_chain_reports_missing_component() -> None:
+    response = _service().get_fru_dependency_chain("X1 Carbon Gen 9", "display panel")
+
+    assert response["status"] == "not_found"
+    assert response["results"] == []
 
 
 def test_related_diagram_returns_metadata_only() -> None:

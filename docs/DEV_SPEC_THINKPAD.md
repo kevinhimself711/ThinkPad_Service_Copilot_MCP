@@ -395,7 +395,7 @@ Registered M5 tools:
 
 Deferred tools:
 
-- `get_fru_dependency_chain`: deferred to M7 Graph RAG.
+- `get_fru_dependency_chain`: implemented in M7 Graph RAG.
 - `compare_generations`: deferred until retrieval evaluation and model applicability are stronger.
 
 Standard tool response shape:
@@ -508,3 +508,50 @@ Known M6 baseline finding:
 
 - T480 screw exact lookup with ASCII `x` does not match extracted screw rows that use the multiplication sign `×`.
 - This should be treated as a normalization/rerank follow-up, not hidden by changing the golden expectation.
+
+## 17. M7 FRU Dependency Graph Contract
+
+M7 adds lightweight Graph RAG over M3 `FRUProcedure` and `DependencyEdge` records. It does not generate repair prose, run an agent, download new manuals, rebuild retrieval indexes, or introduce a graph database.
+
+Graph API:
+
+```python
+build_fru_dependency_graph(procedures, dependency_edges, manual_ids=None) -> FRUDependencyGraph
+FRUDependencyGraph.get_dependency_chain(manual_id, fru_id, max_depth=10) -> dict
+```
+
+Tool service API:
+
+```python
+ThinkPadToolService.get_fru_dependency_chain(model, component_or_fru, max_depth=10)
+```
+
+MCP tool:
+
+- `get_fru_dependency_chain`
+- Required input: `model`, `component_or_fru`
+- Optional input: `max_depth`, default `10`
+- Output: standard ThinkPad JSON envelope with one `fru_dependency_chain` result.
+
+Result fields:
+
+- `target`: the requested FRU procedure node.
+- `dependency_chain`: ordered recursive prerequisite FRU nodes.
+- `edge_count`: traversed dependency edge count.
+- `missing_prerequisites`: prerequisite IDs referenced by edges but missing from procedure records.
+- `cycle_detected`: true when traversal finds a cycle.
+- `truncated`: true when `max_depth` prevents full traversal.
+- `citations`: target, chain, missing-edge, and cycle citations when available.
+
+Behavior rules:
+
+- Ambiguous model text returns `status=clarification_required`.
+- Missing component or FRU ID returns `status=not_found`.
+- Cycles do not raise; they are reported as graph evidence.
+- Graph traversal is structured-record based and does not call live retrieval or LLM providers.
+
+Evaluation:
+
+- Canonical M7 fixture: `tests/fixtures/thinkpad_m7_golden_set.json`.
+- It preserves all M6 cases and adds graph cases for battery, system board, exact FRU ID lookup, ambiguous model refusal, and negative component lookup.
+- Structured M7 evaluation skips live retrieval cases by default and must report zero evaluated failures before M8 agent work.

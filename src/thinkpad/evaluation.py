@@ -21,11 +21,19 @@ SUPPORTED_TOOLS = {
     "query_thinkpad_service",
     "lookup_error_code",
     "get_fru_procedure",
+    "get_fru_dependency_chain",
     "get_screw_spec",
     "get_related_diagram",
     "get_safety_warnings",
 }
 SUPPORTED_STATUSES = {"ok", "clarification_required", "not_found", "error", "skipped"}
+TOP_K_TOOLS = {
+    "lookup_error_code",
+    "get_fru_procedure",
+    "get_screw_spec",
+    "get_related_diagram",
+    "get_safety_warnings",
+}
 
 
 @dataclass(frozen=True)
@@ -199,7 +207,7 @@ def evaluate_thinkpad_cases(
         "failed_case_count": sum(1 for result in results if not result.passed and not result.skipped),
     }
     return ThinkPadEvalReport(
-        version="m6",
+        version=_report_version(cases),
         collection=collection,
         top_k=top_k,
         query_count=len(cases),
@@ -256,7 +264,7 @@ def _call_tool(
     if case.tool == "query_thinkpad_service":
         params.setdefault("collection", collection)
         params.setdefault("top_k", top_k)
-    elif case.tool not in {"list_supported_models", "resolve_thinkpad_model"}:
+    elif case.tool in TOP_K_TOOLS:
         params.setdefault("top_k", top_k)
     method = getattr(service, case.tool)
     response = method(**params)
@@ -550,6 +558,12 @@ def _int_set(value: Any) -> set[int]:
         except (TypeError, ValueError):
             continue
     return result
+
+
+def _report_version(cases: list[ThinkPadGoldenCase]) -> str:
+    if any(case.tool == "get_fru_dependency_chain" for case in cases):
+        return "m7"
+    return "m6"
 
 
 def _flatten_text(value: Any) -> str:
