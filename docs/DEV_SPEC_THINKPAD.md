@@ -651,3 +651,41 @@ M8.1 remediation result:
 - Live LLM 96-case run improved from 5 failed to 0 failed, with `llm_citation_preservation=1.0000` and `unsupported_claim_rate=0.0000`.
 - Stress failures decreased from 17 to 10 after filtering diagnostic pseudo-FRU candidates and expanding component alias normalization.
 - Remaining stress failures are not gold-set failures. They identify future alias/procedure-applicability cleanup targets before exposing a public `plan_repair` MCP tool.
+
+## 19. M8.2 Strict/Raw Evaluation Contract
+
+M8.2 adds evaluator-only strict/raw modes. It does not change default agent behavior and does not remove M8.1 fallback.
+
+CLI additions:
+
+```powershell
+.\.venv\Scripts\python scripts\thinkpad_agent_evaluate.py `
+  --strict-live-llm `
+  --strict-citation
+```
+
+Evaluator behavior:
+
+- `--strict-live-llm` disables LLM repair/fallback by forcing zero LLM repair attempts for the run.
+- `--strict-citation` fails a case when not every repair step has a citation or when step citations do not satisfy expected manual/page/record constraints.
+- `provider_error_rate` remains a failure signal for provider cleanliness, but recovered user-visible success is reported separately.
+
+Additional metrics:
+
+- `raw_llm_success_rate`: live LLM produced valid cited output without provider error or repair/fallback.
+- `fallback_recovered_rate`: a live LLM case passed after repair/fallback recovery.
+- `provider_clean_rate`: inverse of provider-error occurrence.
+- `strict_citation_accuracy`: every repair step satisfies expected citation constraints.
+- `all_step_citation_coverage`: fraction of repair steps with minimum citation fields.
+
+Canonical M8.2 fixture:
+
+- `tests/fixtures/thinkpad_m8_2_reality_golden_set.json`
+- 120 cases: M8 96-case fixture plus 24 harder anti-inflation cases.
+
+Known M8.2 result:
+
+- Deterministic strict 120-case pass rate: 0.3833.
+- Live retrieval strict 120-case pass rate: 0.3917.
+- Raw live LLM strict 120-case pass rate: 0.3167, with `raw_llm_success_rate=0.0417`.
+- These values are intentionally lower than M8.1. They are used to prevent inflated claims, not to replace the recovered M8.1 demo path.

@@ -82,7 +82,7 @@ Do not rewrite the generic MCP server, vector store layer, dashboard, provider a
 
 ## 3. Current Repository Reality
 
-The repository has completed M0-M8.1 and is ready for M9 packaging/interview-readiness work. M8.1 remediated the M8 live LLM golden-set failures, while provider fallback, high p95 latency, and stress-case alias gaps remain tracked risks.
+The repository has completed M0-M8.2 and is ready for M9 packaging/interview-readiness work only if demo/README claims clearly distinguish contract regression, raw live provider quality, recovered user-visible success, and strict citation quality.
 
 Current milestone status:
 
@@ -100,10 +100,12 @@ Current milestone status:
 | M7.1 | Complete | M0-M7 completion audit and live regression are recorded. |
 | M8 | Complete with risk | Local repair-planning agent, 96-case benchmark, live retrieval baseline, live LLM baseline, and stress benchmark are implemented; the initial live LLM baseline had 5 recorded failures. |
 | M8.1 | Complete with risk | LLM composition hardening, deterministic evidence-only repair fallback, provider-failure classification, and stress candidate cleanup are implemented; 96-case live LLM now passes, while generated stress cases still show component alias gaps. |
+| M8.2 | Complete with risk | Strict/raw anti-inflation benchmark is implemented; 120-case strict runs show much lower raw LLM and strict-citation metrics, clarifying that M8.1 1.0 is contract-level. |
 
 Canonical audit report: `docs/M0_M7_PROGRESS_AUDIT.md`.
 Canonical M8 performance report: `docs/M8_AGENT_PERFORMANCE_BASELINE.md`.
 Canonical M8.1 remediation report: `docs/M8_1_REMEDIATION_REPORT.md`.
+Canonical M8.2 evaluation reality-check report: `docs/M8_2_EVAL_REALITY_CHECK.md`.
 
 Canonical paths:
 
@@ -499,13 +501,14 @@ Do not claim a test passed unless it was run.
 
 ## 16. Open Risks
 
-Current risks carried forward after M8.1:
+Current risks carried forward after M8.2:
 
 - M1/M3 extraction artifacts are structured candidates, not fully human-audited gold facts.
 - Figure and diagram records are useful retrieval targets, but exact specs must still come from text/table evidence.
 - Some M3-derived stress cases still expose component alias and procedure-applicability gaps.
 - M4/M6/M7/M8 golden metrics are scoped to committed fixtures and do not represent every possible technician query.
-- M8.1 live LLM generation passes the 96-case committed fixture, but the run still recorded provider fallback/recovery and high `latency_ms_p95`.
+- M8.1 live LLM generation passes the 96-case committed fixture after recovery, but M8.2 raw live LLM strict scoring is low and must not be overclaimed.
+- M8.2 strict citation scoring shows the current fixture does not yet encode per-step expected citation pages/record types cleanly enough for final generated repair-answer claims.
 - The local manifest and local index contain real operational metadata/artifacts, but committed examples must remain safe and copyright-light.
 
 Engineering response:
@@ -515,6 +518,7 @@ Engineering response:
 - prefer structured table records for exact facts
 - use live provider tests when they reduce risk, but record provider fallback and failure rates honestly
 - keep LLM composition validation in place before exposing final repair planning through MCP
+- report contract, raw provider, recovered, and strict citation metrics separately
 
 ---
 

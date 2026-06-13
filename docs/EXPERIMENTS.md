@@ -1370,3 +1370,166 @@ Result:
 | `retrieval_fallback_rate` | 0.0258 |
 
 Remaining failures are clustered in USB board, wireless WAN/LAN, and power button / fingerprint reader procedure candidates. These remain non-gold stress findings.
+
+## M8.2-001: Strict/Raw Evaluator Unit Tests
+
+- Date: 2026-06-13
+- Hypothesis: The evaluator can expose raw LLM failures and strict citation failures without changing M8.1 agent fallback behavior.
+
+Command:
+
+```powershell
+.\.venv\Scripts\python -m pytest tests\thinkpad -q --basetemp data\tmp\pytest_m8_2_focused2 -p no:cacheprovider
+```
+
+Result: passed, 95 tests.
+
+Decision: normal mode can still recover provider failures with evidence-only fallback, while `strict_live_llm` and `strict_citation` preserve failures for evaluation.
+
+## M8.2-002: Deterministic Strict Anti-Inflation Run
+
+- Date: 2026-06-13
+- Hypothesis: A stricter 120-case fixture and per-step citation scoring should prevent M8.1-style aggregate `1.0000` from being overinterpreted.
+
+Command:
+
+```powershell
+.\.venv\Scripts\python scripts\thinkpad_agent_evaluate.py `
+  --golden-set tests\fixtures\thinkpad_m8_2_reality_golden_set.json `
+  --manifest data\manifests\manuals_manifest.yaml `
+  --extracted-dir data\extracted\m3 `
+  --collection thinkpad_m4 `
+  --mode deterministic `
+  --strict-citation `
+  --output data\eval\m8_2_report_deterministic_strict.json
+```
+
+Result:
+
+| Metric | Value |
+|---|---:|
+| Cases | 120 |
+| Failed cases | 74 |
+| `passed_case_rate` | 0.3833 |
+| `final_plan_status_accuracy` | 0.8833 |
+| `citation_accuracy` | 0.8958 |
+| `strict_citation_accuracy` | 0.2708 |
+| `all_step_citation_coverage` | 0.9062 |
+
+Decision: the previous 1.0 headline was contract-level. Strict citation and harder cases expose real measurement gaps.
+
+## M8.2-003: Live Retrieval Strict Run
+
+- Date: 2026-06-13
+- Hypothesis: Live retrieval should remain operational, but strict citation should still keep the benchmark below inflated 1.0.
+
+Command:
+
+```powershell
+.\.venv\Scripts\python scripts\thinkpad_agent_evaluate.py `
+  --golden-set tests\fixtures\thinkpad_m8_2_reality_golden_set.json `
+  --manifest data\manifests\manuals_manifest.yaml `
+  --extracted-dir data\extracted\m3 `
+  --collection thinkpad_m4 `
+  --require-live-retrieval `
+  --strict-citation `
+  --output data\eval\m8_2_report_live_retrieval_strict.json
+```
+
+Result:
+
+| Metric | Value |
+|---|---:|
+| Cases | 120 |
+| Failed cases | 73 |
+| `passed_case_rate` | 0.3917 |
+| `strict_citation_accuracy` | 0.3021 |
+| `provider_error_rate` | 0.0000 |
+| `retrieval_fallback_rate` | 0.0083 |
+| `latency_ms_p95` | 1657 ms |
+
+Decision: retrieval remains available and slightly improves some hard diagram/alias cases, but does not solve strict per-step citation issues.
+
+## M8.2-004: Raw Live LLM Strict Run
+
+- Date: 2026-06-13
+- Hypothesis: disabling M8.1 evidence-only fallback will expose raw LLM/provider output quality separately from recovered user-visible success.
+- Execution note: one full 120-case run exceeded the 20-minute command timeout. The accepted result was produced from six 20-case chunks and combined into `data\eval\m8_2_report_raw_live_llm_strict.json`.
+
+Command shape:
+
+```powershell
+.\.venv\Scripts\python scripts\thinkpad_agent_evaluate.py `
+  --golden-set tests\fixtures\thinkpad_m8_2_reality_golden_set.json `
+  --manifest data\manifests\manuals_manifest.yaml `
+  --extracted-dir data\extracted\m3 `
+  --collection thinkpad_m4 `
+  --live-llm `
+  --strict-live-llm `
+  --strict-citation `
+  --offset <0|20|40|60|80|100> `
+  --limit 20 `
+  --output data\eval\m8_2_report_raw_live_llm_strict_part_<offset>.json
+```
+
+Combined result:
+
+| Metric | Value |
+|---|---:|
+| Cases | 120 |
+| Failed cases | 82 |
+| `passed_case_rate` | 0.3167 |
+| `raw_llm_success_rate` | 0.0417 |
+| `llm_citation_preservation` | 0.0833 |
+| `fallback_recovered_rate` | 0.0000 |
+| `provider_error_rate` | 0.0000 |
+| `latency_ms_p95` | 52109 ms |
+
+Decision: raw live LLM quality is much weaker than M8.1 recovered success. This is the correct metric to cite when discussing raw generation reliability.
+
+## M8.2-005: Stress Live Retrieval Strict Run
+
+- Date: 2026-06-13
+- Hypothesis: strict citation scoring over generated stress cases should expose extraction/alias weaknesses even more clearly.
+
+Command:
+
+```powershell
+.\.venv\Scripts\python scripts\thinkpad_agent_evaluate.py `
+  --golden-set data\eval\m8_1_agent_stress_candidates.json `
+  --manifest data\manifests\manuals_manifest.yaml `
+  --extracted-dir data\extracted\m3 `
+  --collection thinkpad_m4 `
+  --require-live-retrieval `
+  --strict-citation `
+  --output data\eval\m8_2_stress_live_retrieval_strict.json
+```
+
+Result:
+
+| Metric | Value |
+|---|---:|
+| Cases | 194 |
+| Failed cases | 178 |
+| `passed_case_rate` | 0.0825 |
+| `final_plan_status_accuracy` | 0.9485 |
+| `strict_citation_accuracy` | 0.1031 |
+| `provider_error_rate` | 0.0000 |
+
+Decision: stress failures remain non-gold pressure-test findings. The low strict pass rate should be used to prioritize alias and per-step citation schema work, not as a product accuracy number.
+
+## M8.2-006: M3 Extraction Spot-Check
+
+- Date: 2026-06-13
+- Hypothesis: a small field-level check can verify that sampled M3 candidate records point to real pages and plausible page signals without committing copyrighted manual text.
+
+Result:
+
+| Metric | Value |
+|---|---:|
+| Manuals sampled | 8 |
+| Records sampled | 24 |
+| Pass | 24 |
+| Review/fail | 0 |
+
+Decision: sampled procedure/table/figure/warning records have valid page and record signals. This does not replace a full human audit of all extracted candidates.

@@ -140,6 +140,8 @@ def evaluate_thinkpad_agent_cases(
     top_k: int = 5,
     llm: BaseLLM | None = None,
     llm_repair_attempts: int = 1,
+    strict_live_llm: bool = False,
+    strict_citation: bool = False,
     progress_path: str | Path | None = None,
 ) -> ThinkPadAgentEvalReport:
     """Evaluate M8 agent cases in deterministic, live retrieval, or live LLM mode."""
@@ -162,7 +164,9 @@ def evaluate_thinkpad_agent_cases(
             collection=collection,
             top_k=top_k,
             llm=llm,
-            llm_repair_attempts=llm_repair_attempts,
+            llm_repair_attempts=0 if strict_live_llm else llm_repair_attempts,
+            strict_live_llm=strict_live_llm,
+            strict_citation=strict_citation,
         )
         results.append(result)
         if progress_file:
@@ -181,9 +185,11 @@ def evaluate_thinkpad_agent_cases(
         "provider_error_count": sum(
             1 for result in results if result.metrics.get("provider_error_rate") == 1.0
         ),
+        "strict_live_llm": strict_live_llm,
+        "strict_citation": strict_citation,
     }
     return ThinkPadAgentEvalReport(
-        version="m8",
+        version="m8_2" if strict_live_llm or strict_citation else "m8",
         mode=mode,
         query_count=len(cases),
         aggregate_metrics=aggregate,
@@ -201,6 +207,8 @@ def _evaluate_one_case(
     top_k: int,
     llm: BaseLLM | None,
     llm_repair_attempts: int,
+    strict_live_llm: bool,
+    strict_citation: bool,
 ) -> ThinkPadAgentEvalResult:
     use_case_llm = bool(mode == "live_llm" and case.expected.get("llm_required", False))
     t0 = time.monotonic()
@@ -219,7 +227,14 @@ def _evaluate_one_case(
     except Exception as exc:
         result = _error_result(case.query, str(exc), mode)
     elapsed_ms = (time.monotonic() - t0) * 1000.0
-    return _score_agent_response(case, result, elapsed_ms, mode)
+    return _score_agent_response(
+        case=case,
+        result=result,
+        elapsed_ms=elapsed_ms,
+        mode=mode,
+        strict_live_llm=strict_live_llm,
+        strict_citation=strict_citation,
+    )
 
 
 def _score_agent_response(
@@ -227,6 +242,8 @@ def _score_agent_response(
     result: RepairPlanResult,
     elapsed_ms: float,
     mode: str,
+    strict_live_llm: bool = False,
+    strict_citation: bool = False,
 ) -> ThinkPadAgentEvalResult:
     expected = case.expected
     result_dict = result.to_dict()
@@ -237,6 +254,7 @@ def _score_agent_response(
     metrics: dict[str, float] = {
         "final_plan_status_accuracy": 1.0 if actual_status == expected_status else 0.0,
         "provider_error_rate": 1.0 if bool(result.validation.get("provider_error")) else 0.0,
+        "provider_clean_rate": 0.0 if bool(result.validation.get("provider_error")) else 1.0,
         "unsupported_claim_rate": 1.0 if int(result.validation.get("unsupported_claim_count") or 0) > int(expected.get("max_unsupported_claims", 0)) else 0.0,
         "retrieval_fallback_rate": 1.0 if _has_retrieval_fallback(result) else 0.0,
     }
@@ -276,10 +294,21 @@ def _score_agent_response(
             expected_manual_ids=_string_set(expected.get("manual_ids")),
             expected_pages=_int_set(expected.get("pages")),
         )
+        metrics["all_step_citation_coverage"] = _all_step_citation_coverage(result.repair_plan)
+        metrics["strict_citation_accuracy"] = _strict_citation_accuracy(
+            result=result,
+            expected_manual_ids=_string_set(expected.get("manual_ids")),
+            expected_pages=_int_set(expected.get("pages")),
+            expected_record_types=_string_set(expected.get("record_types")),
+        )
         if metrics["citation_coverage"] == 0.0:
             failure_reasons.append("minimum citation missing")
         if metrics["citation_accuracy"] == 0.0:
             failure_reasons.append("citation manual/page mismatch")
+        if strict_citation and metrics["all_step_citation_coverage"] < 1.0:
+            failure_reasons.append("not all repair steps have citations")
+        if strict_citation and metrics["strict_citation_accuracy"] < 1.0:
+            failure_reasons.append("strict citation manual/page/record mismatch")
 
     expected_record_types = _string_set(expected.get("record_types"))
     if expected_record_types:
@@ -306,8 +335,24 @@ def _score_agent_response(
     if mode == "live_llm" and expected.get("llm_required", False):
         preserved = result.validation.get("llm_citation_preserved")
         metrics["llm_citation_preservation"] = 1.0 if preserved is True else 0.0
+        recovered = bool(result.validation.get("provider_error_recovered")) or (
+            bool(result.validation.get("llm_repair_attempted"))
+            and bool(result.validation.get("llm_repair_succeeded"))
+        )
+        raw_llm_ok = (
+            actual_status == expected_status
+            and preserved is True
+            and not bool(result.validation.get("provider_error"))
+            and not bool(result.validation.get("llm_repair_attempted"))
+            and int(result.validation.get("unsupported_claim_count") or 0) <= int(expected.get("max_unsupported_claims", 0))
+            and int(result.validation.get("missing_citation_count") or 0) == 0
+        )
+        metrics["raw_llm_success_rate"] = 1.0 if raw_llm_ok else 0.0
+        metrics["fallback_recovered_rate"] = 1.0 if recovered else 0.0
         if metrics["llm_citation_preservation"] == 0.0:
             failure_reasons.append("LLM did not preserve citation labels")
+        if strict_live_llm and metrics["raw_llm_success_rate"] == 0.0:
+            failure_reasons.append("strict live LLM raw output failed")
 
     passed = not failure_reasons
     return ThinkPadAgentEvalResult(
@@ -325,6 +370,11 @@ def _score_agent_response(
             "tool_call_count": len(tool_names),
             "citation_count": len(result.citations),
             "repair_step_count": len(result.repair_plan),
+            "provider_error": bool(result.validation.get("provider_error")),
+            "provider_error_recovered": bool(result.validation.get("provider_error_recovered")),
+            "llm_repair_attempted": bool(result.validation.get("llm_repair_attempted")),
+            "llm_repair_succeeded": bool(result.validation.get("llm_repair_succeeded")),
+            "failure_reason": result.validation.get("failure_reason"),
         },
     )
 
@@ -394,6 +444,36 @@ def _citation_accuracy(
     if expected_pages:
         page_ok = any(_citation_matches_page(citation, expected_pages) for citation in citations)
     return 1.0 if manual_ok and page_ok else 0.0
+
+
+def _all_step_citation_coverage(repair_plan: list[Any]) -> float:
+    if not repair_plan:
+        return 0.0
+    cited = sum(1 for step in repair_plan if _has_minimum_citation(step.citations))
+    return cited / len(repair_plan)
+
+
+def _strict_citation_accuracy(
+    result: RepairPlanResult,
+    expected_manual_ids: set[str],
+    expected_pages: set[int],
+    expected_record_types: set[str],
+) -> float:
+    if not result.repair_plan:
+        return 0.0
+    for step in result.repair_plan:
+        if expected_record_types and step.evidence_type.lower() not in expected_record_types:
+            return 0.0
+        if not _has_minimum_citation(step.citations):
+            return 0.0
+        if expected_manual_ids and not any(
+            str(citation.get("manual_id", "")).lower() in expected_manual_ids
+            for citation in step.citations
+        ):
+            return 0.0
+        if expected_pages and not any(_citation_matches_page(citation, expected_pages) for citation in step.citations):
+            return 0.0
+    return 1.0
 
 
 def _citation_matches_page(citation: dict[str, Any], expected_pages: set[int]) -> bool:

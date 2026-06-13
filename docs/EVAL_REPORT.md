@@ -595,3 +595,42 @@ M8.1 separates generated-plan quality from provider cleanliness:
 - The remaining 10 stress failures are non-gold extraction/alias issues in FRU procedure candidates, not live provider failures.
 
 Decision: M8.1 closes the M8 live LLM demo blocker. M9 can proceed, while keeping stress FRU alias/applicability cleanup as a follow-up hardening item.
+
+## M8.2 Evaluation Reality Check
+
+- Date: 2026-06-13
+- Milestone: M8.2 Evaluation Reality Check + Anti-Inflation Benchmark
+- Canonical report: `docs/M8_2_EVAL_REALITY_CHECK.md`
+- New fixture: `tests/fixtures/thinkpad_m8_2_reality_golden_set.json`
+- Raw local reports: ignored under `data/eval/`
+- Scope: strict/raw evaluator metrics, 120-case anti-inflation fixture, live DashScope strict runs, and 24-record extraction spot-check
+
+### Why This Exists
+
+M8.1 produced several `1.0000` metrics because it was primarily a contract regression gate. That result is useful, but it must not be described as universal open-world repair-answer accuracy.
+
+M8.2 splits the interpretation:
+
+- `contract regression`: status, required tools, citation plumbing, identifiers.
+- `raw provider/LLM quality`: no repair fallback, strict citation preservation.
+- `user-visible recovered success`: M8.1 fallback after deterministic validation.
+
+### Strict Results
+
+| Run | Cases | Failed | Pass Rate | Strict Citation Accuracy | Raw LLM Success | Provider Clean |
+|---|---:|---:|---:|---:|---:|---:|
+| deterministic strict | 120 | 74 | 0.3833 | 0.2708 | n/a | 1.0000 |
+| live retrieval strict | 120 | 73 | 0.3917 | 0.3021 | n/a | 1.0000 |
+| raw live LLM strict | 120 | 82 | 0.3167 | 0.3021 | 0.0417 | 1.0000 |
+| stress live retrieval strict | 194 | 178 | 0.0825 | 0.1031 | n/a | 1.0000 |
+
+Interpretation:
+
+- M8.1 `1.0000` remains valid as a recovered contract-regression result.
+- Raw live LLM strict quality is not ready to claim as independently reliable.
+- Strict citation scoring is intentionally harsher than previous `citation_accuracy`; it exposes that expected pages/record types are not yet modeled per repair step.
+- Live retrieval remained operational in M8.2, with `provider_error_rate=0.0000` in the strict runs.
+
+### M8.2 Decision
+
+M8.2 should be presented as evidence of evaluation integrity. It does not block M9 packaging, but M9 demo and README claims must distinguish recovered user-visible success from raw LLM/provider quality.

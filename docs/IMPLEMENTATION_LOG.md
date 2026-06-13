@@ -1165,3 +1165,58 @@ M8 is ready for milestone commit after final whitespace and secret checks. M9 sh
 ### Handoff
 
 M8.1 closes the M8 live LLM golden-set blocker. M9 can proceed to packaging and interview readiness, but demo materials should keep provider fallback metrics visible and should not claim stress coverage is fully clean.
+
+---
+
+## M8.2: Evaluation Reality Check + Anti-Inflation Benchmark
+
+- Date: 2026-06-13
+- User goal: Re-evaluate why M8.1 produced many `1.0000` metrics, prevent inflated interpretation, and add stricter/raw evaluation before M9.
+- Scope included: evaluator strict/raw metrics, CLI flags, 120-case M8.2 fixture, live DashScope strict evaluations, stress strict run, 24-record M3 extraction spot-check, and documentation.
+- Scope excluded: changing M8.1 agent behavior, exposing `plan_repair` as MCP, downloading new HMMs, committing local `data/`, committing provider traces, committing `docs/INTERVIEW_NOTES.md`.
+
+### File-Level Changes
+
+| Change | Path | Implementation Fact |
+|---|---|---|
+| Modified | `src/thinkpad/agent_evaluation.py` | Added `strict_live_llm` and `strict_citation` evaluation flags; added `raw_llm_success_rate`, `fallback_recovered_rate`, `provider_clean_rate`, `strict_citation_accuracy`, and `all_step_citation_coverage`; added validation summary fields to per-case result summaries. |
+| Modified | `scripts/thinkpad_agent_evaluate.py` | Added `--strict-live-llm` and `--strict-citation` CLI options. |
+| Modified | `tests/thinkpad/test_agent_evaluation.py` | Added tests for raw LLM strict failure, provider-error recovery metrics, strict citation failure, and raw live LLM success metrics. |
+| Added | `tests/fixtures/thinkpad_m8_2_reality_golden_set.json` | Added 120-case anti-inflation fixture by preserving the M8 96 cases and adding 24 harder cases. |
+| Added | `docs/M8_2_EVAL_REALITY_CHECK.md` | Added canonical M8.2 reality-check report with strict metrics and 24 spot-check records. |
+| Modified | `docs/EVAL_REPORT.md` | Added M8.2 summary and interpretation. |
+| Modified | `docs/EXPERIMENTS.md` | Added M8.2 unit, deterministic strict, live retrieval strict, raw live LLM strict, stress strict, and spot-check records. |
+| Modified | `docs/IMPLEMENTATION_LOG.md` | Added this M8.2 implementation fact record. |
+| Modified locally, not committed | `docs/INTERVIEW_NOTES.md` | Added M8.2 interview notes about metric inflation and raw-vs-recovered evaluation. |
+
+### Scripts And Commands
+
+| Script/Command | Purpose | Result |
+|---|---|---|
+| `.\.venv\Scripts\python -m pytest tests\thinkpad -q --basetemp data\tmp\pytest_m8_2_focused2 -p no:cacheprovider` | Focused ThinkPad regression after evaluator changes. | Passed, 95 tests. |
+| `.\.venv\Scripts\ruff check src\thinkpad\agent_evaluation.py scripts\thinkpad_agent_evaluate.py tests\thinkpad\test_agent_evaluation.py` | Focused lint for evaluator/CLI/tests. | Passed. |
+| `.\.venv\Scripts\python scripts\thinkpad_agent_evaluate.py --golden-set tests\fixtures\thinkpad_m8_2_reality_golden_set.json --manifest data\manifests\manuals_manifest.yaml --extracted-dir data\extracted\m3 --collection thinkpad_m4 --mode deterministic --strict-citation --output data\eval\m8_2_report_deterministic_strict.json` | Run M8.2 deterministic strict benchmark. | Completed; 120 cases, 74 failures, pass rate 0.3833. |
+| `.\.venv\Scripts\python scripts\thinkpad_agent_evaluate.py --golden-set tests\fixtures\thinkpad_m8_2_reality_golden_set.json --manifest data\manifests\manuals_manifest.yaml --extracted-dir data\extracted\m3 --collection thinkpad_m4 --require-live-retrieval --strict-citation --output data\eval\m8_2_report_live_retrieval_strict.json` | Run M8.2 live retrieval strict benchmark. | Completed; 120 cases, 73 failures, pass rate 0.3917, provider error rate 0.0000. |
+| `.\.venv\Scripts\python scripts\thinkpad_agent_evaluate.py --golden-set tests\fixtures\thinkpad_m8_2_reality_golden_set.json --manifest data\manifests\manuals_manifest.yaml --extracted-dir data\extracted\m3 --collection thinkpad_m4 --live-llm --strict-live-llm --strict-citation --offset <0/20/40/60/80/100> --limit 20 --output data\eval\m8_2_report_raw_live_llm_strict_part_<offset>.json` | Run raw live LLM strict benchmark in six chunks after a full single run timed out. | Completed; combined local report has 120 cases, 82 failures, pass rate 0.3167, raw LLM success 0.0417. |
+| `.\.venv\Scripts\python scripts\thinkpad_agent_evaluate.py --golden-set data\eval\m8_1_agent_stress_candidates.json --manifest data\manifests\manuals_manifest.yaml --extracted-dir data\extracted\m3 --collection thinkpad_m4 --require-live-retrieval --strict-citation --output data\eval\m8_2_stress_live_retrieval_strict.json` | Run M8.2 stress live retrieval strict benchmark. | Completed; 194 cases, 178 failures, pass rate 0.0825. |
+| Local inline PyMuPDF spot-check script over ignored PDFs and M3 JSONL | Validate sampled M3 records point to real pages/signals. | Completed; 24 records sampled across 8 manuals, 24 pass. |
+
+### Evaluation Results
+
+| Run | Cases | Failed | Pass Rate | Strict Citation Accuracy | Raw LLM Success | Provider Clean |
+|---|---:|---:|---:|---:|---:|---:|
+| deterministic strict | 120 | 74 | 0.3833 | 0.2708 | n/a | 1.0000 |
+| live retrieval strict | 120 | 73 | 0.3917 | 0.3021 | n/a | 1.0000 |
+| raw live LLM strict | 120 | 82 | 0.3167 | 0.3021 | 0.0417 | 1.0000 |
+| stress live retrieval strict | 194 | 178 | 0.0825 | 0.1031 | n/a | 1.0000 |
+
+### Deviations And Risks
+
+- The first full raw live LLM strict command timed out after 20 minutes. It was rerun as six 20-case chunks and combined locally.
+- Strict citation scoring is intentionally harsh and exposes that the current fixture does not yet encode per-step expected citation pages/record types.
+- The low raw LLM strict score is expected and should be presented honestly. It does not invalidate M8.1 recovered behavior.
+- M8.2 hard cases expose alias, generation-interference, symptom-query, and unsupported-generation classification gaps.
+
+### Handoff
+
+M8.2 establishes honest metric boundaries before M9. M9 can proceed, but README/demo/interview material must distinguish contract pass rate, raw live LLM quality, recovered user-visible behavior, and strict citation quality.

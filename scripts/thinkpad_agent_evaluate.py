@@ -51,6 +51,16 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--offset", type=int, default=0, help="Skip the first N cases.")
     parser.add_argument("--limit", type=int, default=None, help="Evaluate at most N cases after offset.")
     parser.add_argument("--llm-repair-attempts", type=int, default=1)
+    parser.add_argument(
+        "--strict-live-llm",
+        action="store_true",
+        help="Disable LLM repair/fallback scoring and fail cases when raw live LLM output is invalid.",
+    )
+    parser.add_argument(
+        "--strict-citation",
+        action="store_true",
+        help="Require every repair step citation to satisfy expected manual/page/record constraints.",
+    )
     return parser.parse_args()
 
 
@@ -88,6 +98,8 @@ def main() -> int:
             top_k=args.top_k,
             llm=llm,
             llm_repair_attempts=max(0, args.llm_repair_attempts),
+            strict_live_llm=bool(args.strict_live_llm),
+            strict_citation=bool(args.strict_citation),
             progress_path=args.progress_jsonl,
         )
     except Exception as exc:
