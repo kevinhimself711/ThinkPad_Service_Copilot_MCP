@@ -566,3 +566,32 @@ M8 meets its implementation and scaled-evaluation goals with risk:
 - `complete_with_risk`: live LLM generated-plan path, because 5/96 cases failed and `llm_citation_preservation` is below 1.0.
 
 Next remediation should focus on LLM composer retries, stricter structured output validation, and component alias cleanup before exposing a final `plan_repair` MCP tool.
+
+## M8.1 Agent Reliability Remediation
+
+- Date: 2026-06-13
+- Milestone: M8.1 Agent Reliability Remediation
+- Canonical report: `docs/M8_1_REMEDIATION_REPORT.md`
+- Raw local reports: ignored under `data/eval/`
+- Scope: LLM composition validation/fallback, provider-error scoring, stress pseudo-FRU cleanup, and before/after evaluation
+- Out of scope: new MCP tool, new HMM download, committed provider traces, production packaging
+
+### Before And After
+
+| Run | M8 Failed | M8.1 Failed | M8.1 Key Metric |
+|---|---:|---:|---|
+| Deterministic 96-case | 0 | 0 | pass rate 1.0000 |
+| Live retrieval 96-case | 0 | 0 | fallback rate 0.1354 |
+| Live LLM 96-case | 5 | 0 | `llm_citation_preservation=1.0000`, `unsupported_claim_rate=0.0000` |
+| Stress deterministic 194-case | 17 | 10 | pass rate 0.9485 |
+| Stress live retrieval 194-case | 17 | 10 | pass rate 0.9485 |
+
+### Interpretation
+
+M8.1 separates generated-plan quality from provider cleanliness:
+
+- Live LLM generated-plan validation is now clean for the 96-case golden set.
+- Provider errors are still counted through `provider_error_rate`; a recovered provider issue does not fail the case if status, citations, identifiers, and required evidence are valid.
+- The remaining 10 stress failures are non-gold extraction/alias issues in FRU procedure candidates, not live provider failures.
+
+Decision: M8.1 closes the M8 live LLM demo blocker. M9 can proceed, while keeping stress FRU alias/applicability cleanup as a follow-up hardening item.

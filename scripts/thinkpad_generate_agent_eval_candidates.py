@@ -21,6 +21,16 @@ if sys.platform == "win32":
 
 from src.thinkpad.manifest import load_manifest  # noqa: E402
 
+_DIAGNOSTIC_PROCEDURE_TERMS = (
+    "configuration",
+    "invalid",
+    "failure",
+    "uuid",
+    "error",
+    "diagnostic",
+    "system will reboot",
+)
+
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Generate local ThinkPad M8 agent stress candidates.")
@@ -88,7 +98,14 @@ def _screw_cases(model: str, manual_id: str, tables: list[dict[str, Any]], limit
 
 
 def _procedure_cases(model: str, manual_id: str, procedures: list[dict[str, Any]], limit: int) -> list[dict[str, Any]]:
-    rows = [row for row in procedures if row.get("manual_id") == manual_id and row.get("fru_id") and row.get("fru_name")]
+    rows = [
+        row
+        for row in procedures
+        if row.get("manual_id") == manual_id
+        and row.get("fru_id")
+        and row.get("fru_name")
+        and _is_service_procedure_candidate(row)
+    ]
     cases = []
     for row in rows[:limit]:
         component = row.get("fru_name")
@@ -146,6 +163,16 @@ def _first_code(value: str) -> str | None:
 
     match = re.search(r"(?<![A-Za-z0-9])([0-9]{4})(?![A-Za-z0-9])", value)
     return match.group(1) if match else None
+
+
+def _is_service_procedure_candidate(row: dict[str, Any]) -> bool:
+    fru_id = str(row.get("fru_id") or "")
+    if not fru_id.isdigit():
+        return False
+    if int(fru_id) % 10 != 0:
+        return False
+    name = str(row.get("fru_name") or "").lower()
+    return not any(term in name for term in _DIAGNOSTIC_PROCEDURE_TERMS)
 
 
 if __name__ == "__main__":

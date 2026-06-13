@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from scripts.thinkpad_generate_agent_eval_candidates import _is_service_procedure_candidate
 from src.libs.llm.base_llm import BaseLLM, ChatResponse, Message
 from src.thinkpad.agent import plan_thinkpad_repair
 from src.thinkpad.manifest import ManualMetadata
@@ -9,11 +10,19 @@ from src.thinkpad.tool_service import ThinkPadToolService
 
 
 class FakeLLM(BaseLLM):
-    def __init__(self, content: str) -> None:
-        self.content = content
+    def __init__(self, content: str | list[str]) -> None:
+        self.contents = [content] if isinstance(content, str) else list(content)
+        self.calls = 0
 
     def chat(self, messages: list[Message], trace: Any | None = None, **kwargs: Any) -> ChatResponse:
-        return ChatResponse(content=self.content, model="fake")
+        index = min(self.calls, len(self.contents) - 1)
+        self.calls += 1
+        return ChatResponse(content=self.contents[index], model="fake")
+
+
+class FailingLLM(BaseLLM):
+    def chat(self, messages: list[Message], trace: Any | None = None, **kwargs: Any) -> ChatResponse:
+        raise RuntimeError("DashScope chat request failed: sk-test-secret should not leak")
 
 
 def test_agent_ambiguous_model_returns_clarification() -> None:
@@ -80,13 +89,80 @@ def test_agent_fake_llm_unsupported_identifier_is_marked() -> None:
         "21CB battery removal plan",
         service,
         use_llm=True,
-        llm=FakeLLM("Replace unsupported FRU 9999."),
+        llm=FakeLLM(_llm_json("Replace unsupported FRU 9999.", extra_citations=True)),
     )
 
-    assert result.status == "ok"
+    assert result.status == "error"
     assert result.generated_answer is not None
     assert result.validation["unsupported_claim_count"] >= 1
     assert any("9999" in claim for claim in result.validation["unsupported_claims"])
+
+
+def test_agent_fake_llm_repairs_uncited_first_response() -> None:
+    service = _service_with_records()
+    llm = FakeLLM(
+        [
+            "uncited prose plan",
+            _llm_json("Use only the cited built-in battery evidence.", extra_citations=True),
+        ]
+    )
+
+    result = plan_thinkpad_repair(
+        "21CB battery removal plan",
+        service,
+        use_llm=True,
+        llm=llm,
+        llm_repair_attempts=1,
+    )
+
+    assert result.status == "ok"
+    assert llm.calls == 2
+    assert result.validation["llm_repair_attempted"] is True
+    assert result.validation["llm_repair_succeeded"] is True
+    assert result.validation["failure_reason"] is None
+
+
+def test_agent_fake_llm_failed_repair_records_failure_reason() -> None:
+    service = _service_with_records()
+    bad = _llm_json("Replace unsupported FRU 9999.", extra_citations=True)
+
+    result = plan_thinkpad_repair(
+        "21CB battery removal plan",
+        service,
+        use_llm=True,
+        llm=FakeLLM([bad, bad]),
+        llm_repair_attempts=1,
+    )
+
+    assert result.status == "error"
+    assert result.validation["llm_repair_attempted"] is True
+    assert result.validation["llm_repair_succeeded"] is False
+    assert result.validation["failure_reason"] == "unsupported_numeric_identifier"
+
+
+def test_agent_provider_error_does_not_leak_secret() -> None:
+    service = _service_with_records()
+
+    result = plan_thinkpad_repair(
+        "21CB battery removal plan",
+        service,
+        use_llm=True,
+        llm=FailingLLM(),
+        llm_repair_attempts=1,
+    )
+
+    serialized = result.to_json()
+    assert result.status == "ok"
+    assert result.validation["provider_error"] is True
+    assert result.validation["provider_error_recovered"] is True
+    assert result.validation["llm_repair_succeeded"] is True
+    assert "sk-test-secret" not in serialized
+
+
+def test_stress_generator_filters_diagnostic_pseudo_fru() -> None:
+    assert _is_service_procedure_candidate({"fru_id": "1020", "fru_name": "Built-in battery"})
+    assert not _is_service_procedure_candidate({"fru_id": "2204", "fru_name": "System configuration data is invalid"})
+    assert not _is_service_procedure_candidate({"fru_id": "2201", "fru_name": "Machine UUID is invalid"})
 
 
 def _service_with_records() -> ThinkPadToolService:
@@ -198,3 +274,18 @@ def _citation(manual_id: str, page: int, section_id: str | None) -> dict[str, An
         "section": None,
         "section_id": section_id,
     }
+
+
+def _llm_json(action: str, extra_citations: bool = False) -> str:
+    manual = "thinkpad_x1_carbon_gen10_x1_yoga_gen7_hmm"
+    citations = [f"[{manual} p.72]"]
+    if extra_citations:
+        citations.append(f"[{manual} p.70]")
+    return (
+        "{"
+        f"\"steps\":[{{\"title\":\"Use evidence\",\"action\":\"{action}\",\"citations\":[\"{citations[0]}\"]}}],"
+        f"\"citations\":{citations!r},"
+        "\"warnings\":[],"
+        "\"limitations\":[]"
+        "}"
+    ).replace("'", '"')

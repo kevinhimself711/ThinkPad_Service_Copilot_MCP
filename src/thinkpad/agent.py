@@ -31,6 +31,7 @@ class RepairPlanRequest:
     use_retrieval: bool = False
     require_live_retrieval: bool = False
     use_llm: bool = False
+    llm_repair_attempts: int = 1
 
     def to_dict(self) -> dict[str, Any]:
         """Return a JSON-safe representation."""
@@ -164,11 +165,12 @@ _COMPONENT_PATTERNS: tuple[tuple[str, str], ...] = (
     (r"\bmemory\b", "memory module"),
     (r"\bm\.?2\s+ssd\b|\bssd\b", "SSD"),
     (r"\bsolid[- ]state drive\b|\bstorage drive\b", "solid-state drive"),
-    (r"\bwwan\b|\bwireless wan\b", "wireless WAN card"),
-    (r"\bwlan\b|\bwireless lan\b", "wireless LAN card"),
+    (r"\bwwan\b|\bwireless[- ]wan\b", "wireless WAN card"),
+    (r"\bwlan\b|\bwireless[- ]lan\b", "wireless LAN card"),
     (r"\bdisplay\b|\blcd\b", "display assembly"),
     (r"\baudio board\b", "audio board"),
     (r"\bio card\b|\bi/o card\b", "I/O card"),
+    (r"\bio bracket\b|\bi/o bracket\b", "I/O bracket"),
 )
 
 
@@ -181,6 +183,7 @@ def plan_thinkpad_repair(
     top_k: int = 5,
     use_retrieval: bool = False,
     require_live_retrieval: bool = False,
+    llm_repair_attempts: int = 1,
 ) -> RepairPlanResult:
     """Plan a ThinkPad repair workflow from citation-backed evidence tools."""
 
@@ -191,6 +194,7 @@ def plan_thinkpad_repair(
         use_retrieval=use_retrieval or require_live_retrieval,
         require_live_retrieval=require_live_retrieval,
         use_llm=use_llm,
+        llm_repair_attempts=max(0, llm_repair_attempts),
     )
     if not query or not query.strip():
         return _final_result(
@@ -386,15 +390,39 @@ def plan_thinkpad_repair(
         if llm is None:
             raise ThinkPadAgentError("live LLM mode requires an LLM instance")
         try:
-            generated_answer = _compose_with_llm(query=query, repair_plan=repair_plan, evidence=evidence, llm=llm)
+            composition = _compose_with_llm(
+                query=query,
+                repair_plan=repair_plan,
+                evidence=evidence,
+                citations=citations,
+                llm=llm,
+                repair_attempts=request.llm_repair_attempts,
+            )
+            generated_answer = composition["generated_answer"]
             validation = _validate_plan(
                 repair_plan=repair_plan,
                 citations=citations,
                 generated_answer=generated_answer,
             )
-            validation["provider_error"] = provider_error
+            validation.update(composition["validation"])
+            validation["provider_error"] = provider_error or bool(composition["validation"].get("provider_error"))
+            if composition["status"] != "ok":
+                return _final_result(
+                    status="error",
+                    clarification_needed=False,
+                    query=query,
+                    message=composition["message"],
+                    request=request,
+                    tool_trace=calls,
+                    evidence=evidence,
+                    repair_plan=repair_plan,
+                    refusal=None,
+                    generated_answer=generated_answer,
+                    validation=validation,
+                )
         except Exception as exc:
             validation["provider_error"] = True
+            validation["failure_reason"] = _classify_llm_failure(str(exc))
             validation.setdefault("unsupported_claims", []).append(f"llm_provider_error:{exc}")
             validation["unsupported_claim_count"] = len(validation.get("unsupported_claims") or [])
             return _final_result(
@@ -652,34 +680,248 @@ def _compose_with_llm(
     query: str,
     repair_plan: list[RepairPlanStep],
     evidence: EvidenceBundle,
+    citations: list[dict[str, Any]],
     llm: BaseLLM,
+    repair_attempts: int,
+) -> dict[str, Any]:
+    labels = [_citation_label(citation) for citation in citations]
+    required_labels = labels[:5]
+    allowed_labels = set(labels)
+    previous_content: str | None = None
+    previous_failure: str | None = None
+    validation: dict[str, Any] = {
+        "llm_repair_attempted": False,
+        "llm_repair_succeeded": False,
+        "failure_reason": None,
+        "provider_error": False,
+    }
+    total_attempts = 1 + max(0, repair_attempts)
+
+    for attempt in range(total_attempts):
+        repair_mode = attempt > 0
+        if repair_mode:
+            validation["llm_repair_attempted"] = True
+        try:
+            content = _call_llm_composer(
+                query=query,
+                repair_plan=repair_plan,
+                labels=labels,
+                llm=llm,
+                repair_mode=repair_mode,
+                previous_content=previous_content,
+                previous_failure=previous_failure,
+            )
+            generated_answer = _normalize_llm_json_answer(
+                content=content,
+                required_labels=required_labels,
+                allowed_labels=allowed_labels,
+            )
+            check = _validate_plan(
+                repair_plan=repair_plan,
+                citations=citations,
+                generated_answer=generated_answer,
+            )
+            if check["unsupported_claim_count"] == 0 and check["missing_citation_count"] == 0:
+                validation["llm_repair_succeeded"] = repair_mode
+                validation["failure_reason"] = None
+                validation["provider_error"] = False
+                return {
+                    "status": "ok",
+                    "generated_answer": generated_answer,
+                    "message": "LLM composition succeeded.",
+                    "validation": validation,
+                }
+            previous_content = content
+            previous_failure = _failure_reason_from_validation(check)
+        except Exception as exc:
+            previous_content = None
+            previous_failure = _classify_llm_failure(str(exc))
+            if previous_failure.startswith("provider_"):
+                validation["provider_error"] = True
+        time.sleep(0.25 * attempt)
+
+    if (
+        previous_failure
+        and repair_attempts > 0
+        and (previous_failure in {"malformed_response", "missing_citation"} or previous_failure.startswith("provider_"))
+    ):
+        validation["llm_repair_attempted"] = True
+        generated_answer = _deterministic_llm_repair_answer(repair_plan=repair_plan, citations=citations)
+        check = _validate_plan(
+            repair_plan=repair_plan,
+            citations=citations,
+            generated_answer=generated_answer,
+        )
+        if check["unsupported_claim_count"] == 0 and check["missing_citation_count"] == 0:
+            validation["llm_repair_succeeded"] = True
+            validation["failure_reason"] = (
+                f"{previous_failure}_recovered"
+                if previous_failure.startswith("provider_")
+                else None
+            )
+            validation["provider_error_recovered"] = previous_failure.startswith("provider_")
+            return {
+                "status": "ok",
+                "generated_answer": generated_answer,
+                "message": "LLM composition repaired by deterministic evidence normalizer.",
+                "validation": validation,
+            }
+
+    validation["failure_reason"] = previous_failure or "llm_validation_failed"
+    return {
+        "status": "error",
+        "generated_answer": previous_content,
+        "message": f"LLM composition failed validation: {validation['failure_reason']}",
+        "validation": validation,
+    }
+
+
+def _call_llm_composer(
+    query: str,
+    repair_plan: list[RepairPlanStep],
+    labels: list[str],
+    llm: BaseLLM,
+    repair_mode: bool,
+    previous_content: str | None,
+    previous_failure: str | None,
 ) -> str:
-    labels = [_citation_label(citation) for citation in _citations_from_evidence(evidence)]
+    response_contract = {
+        "steps": [
+            {
+                "title": "short title",
+                "action": "one evidence-grounded action",
+                "citations": ["[manual_id p.page]"],
+            }
+        ],
+        "citations": ["[manual_id p.page]"],
+        "warnings": ["cited warning or empty list"],
+        "limitations": ["missing evidence or empty list"],
+    }
     prompt = {
         "query": query,
+        "mode": "repair" if repair_mode else "compose",
         "instructions": [
-            "Write a concise ThinkPad repair plan only from the provided structured plan.",
-            "Preserve citation labels exactly as provided.",
+            "Return only one JSON object matching response_contract.",
+            "Use only the provided structured_plan and citation_labels.",
+            "Every step must have at least one citation label from citation_labels.",
             "Do not add FRU IDs, screw specs, torque values, error codes, warnings, or steps not present in the evidence.",
-            "If evidence is incomplete, say what is missing instead of guessing.",
+            "If evidence is incomplete, record it in limitations instead of guessing.",
         ],
         "citation_labels": labels,
+        "response_contract": response_contract,
         "structured_plan": [step.to_dict() for step in repair_plan],
+        "previous_content": previous_content if repair_mode else None,
+        "previous_failure": previous_failure if repair_mode else None,
     }
     response = llm.chat(
         [
-            Message(role="system", content="You compose cited repair plans from fixed evidence only."),
+            Message(role="system", content="You compose cited ThinkPad repair plans from fixed evidence only."),
             Message(role="user", content=json.dumps(prompt, ensure_ascii=False, indent=2)),
         ],
         temperature=0.0,
-        max_tokens=350,
+        max_tokens=500,
     )
-    content = response.content.strip()
-    required_labels = labels[:5]
-    missing_labels = [label for label in required_labels if label not in content]
+    return response.content.strip()
+
+
+def _deterministic_llm_repair_answer(
+    repair_plan: list[RepairPlanStep],
+    citations: list[dict[str, Any]],
+) -> str:
+    citation_labels = [_citation_label(citation) for citation in citations]
+    steps = []
+    for index, step in enumerate(repair_plan, start=1):
+        step_labels = [_citation_label(citation) for citation in step.citations]
+        if not step_labels and citation_labels:
+            step_labels = citation_labels[:1]
+        steps.append(
+            {
+                "step_id": f"llm_step_{index:02d}",
+                "title": step.title,
+                "action": step.action,
+                "citations": step_labels,
+            }
+        )
+    repaired = {
+        "steps": steps,
+        "citations": citation_labels,
+        "warnings": [
+            step.action
+            for step in repair_plan
+            if step.evidence_type == "warning"
+        ],
+        "limitations": ["Generated by deterministic evidence repair after LLM output validation failed."],
+    }
+    return json.dumps(repaired, ensure_ascii=False, sort_keys=True)
+
+
+def _normalize_llm_json_answer(
+    content: str,
+    required_labels: list[str],
+    allowed_labels: set[str],
+) -> str:
+    data = _extract_json_object(content)
+    steps = data.get("steps")
+    citations = data.get("citations")
+    warnings = data.get("warnings", [])
+    limitations = data.get("limitations", [])
+    if not isinstance(steps, list):
+        raise ThinkPadAgentError("malformed_response: steps must be a list")
+    if not isinstance(citations, list):
+        raise ThinkPadAgentError("malformed_response: citations must be a list")
+    if not isinstance(warnings, list):
+        raise ThinkPadAgentError("malformed_response: warnings must be a list")
+    if not isinstance(limitations, list):
+        raise ThinkPadAgentError("malformed_response: limitations must be a list")
+
+    normalized_steps: list[dict[str, Any]] = []
+    used_labels: set[str] = set(str(label) for label in citations)
+    for index, step in enumerate(steps, start=1):
+        if not isinstance(step, dict):
+            raise ThinkPadAgentError("malformed_response: each step must be an object")
+        step_citations = step.get("citations")
+        if not isinstance(step_citations, list) or not step_citations:
+            raise ThinkPadAgentError("missing_citation: each step requires citations")
+        used_labels.update(str(label) for label in step_citations)
+        normalized_steps.append(
+            {
+                "step_id": f"llm_step_{index:02d}",
+                "title": str(step.get("title") or "").strip(),
+                "action": str(step.get("action") or "").strip(),
+                "citations": [str(label) for label in step_citations],
+            }
+        )
+    unknown_labels = sorted(label for label in used_labels if label and label not in allowed_labels)
+    if unknown_labels:
+        raise ThinkPadAgentError(f"unsupported_citation_label: {', '.join(unknown_labels)}")
+    missing_labels = [label for label in required_labels if label not in used_labels]
     if missing_labels:
-        content = f"{content}\n\nRequired citation labels: {' '.join(missing_labels)}"
-    return content
+        raise ThinkPadAgentError(f"missing_citation: {', '.join(missing_labels)}")
+    normalized = {
+        "steps": normalized_steps,
+        "citations": [str(label) for label in citations],
+        "warnings": [str(item) for item in warnings],
+        "limitations": [str(item) for item in limitations],
+    }
+    return json.dumps(normalized, ensure_ascii=False, sort_keys=True)
+
+
+def _extract_json_object(content: str) -> dict[str, Any]:
+    text = content.strip()
+    if text.startswith("```"):
+        text = re.sub(r"^```(?:json)?\s*", "", text, flags=re.IGNORECASE)
+        text = re.sub(r"\s*```$", "", text)
+    start = text.find("{")
+    end = text.rfind("}")
+    if start < 0 or end <= start:
+        raise ThinkPadAgentError("malformed_response: JSON object not found")
+    try:
+        data = json.loads(text[start : end + 1])
+    except json.JSONDecodeError as exc:
+        raise ThinkPadAgentError(f"malformed_response: {exc.msg}") from exc
+    if not isinstance(data, dict):
+        raise ThinkPadAgentError("malformed_response: root must be an object")
+    return data
 
 
 def _validate_plan(
@@ -698,18 +940,59 @@ def _validate_plan(
 
     citation_labels = [_citation_label(citation) for citation in citations if _has_minimum_citation([citation])]
     llm_citation_preserved = None
+    missing_generated_citations: list[str] = []
     if generated_answer is not None:
-        llm_citation_preserved = bool(citation_labels) and all(label in generated_answer for label in citation_labels[:5])
+        missing_generated_citations = [label for label in citation_labels[:5] if label not in generated_answer]
+        llm_citation_preserved = bool(citation_labels) and not missing_generated_citations
         if not llm_citation_preserved:
             unsupported_claims.append("llm_missing_required_citation_label")
         unsupported_claims.extend(_unsupported_identifiers(generated_answer, _allowed_identifier_set(repair_plan, citations)))
+    missing_citation_count = len(missing_step_citations) + len(missing_generated_citations)
 
     return {
         "minimum_citations_present": not missing_step_citations,
         "llm_citation_preserved": llm_citation_preserved,
         "unsupported_claims": unsupported_claims,
         "unsupported_claim_count": len(unsupported_claims),
+        "missing_citation_count": missing_citation_count,
+        "llm_repair_attempted": False,
+        "llm_repair_succeeded": False,
+        "failure_reason": _failure_reason_from_validation(
+            {
+                "unsupported_claims": unsupported_claims,
+                "unsupported_claim_count": len(unsupported_claims),
+                "missing_citation_count": missing_citation_count,
+            }
+        ),
     }
+
+
+def _failure_reason_from_validation(validation: dict[str, Any]) -> str | None:
+    if int(validation.get("missing_citation_count") or 0) > 0:
+        return "missing_citation"
+    claims = [str(claim) for claim in validation.get("unsupported_claims") or []]
+    if any(claim.startswith("unsupported_numeric_identifier") for claim in claims):
+        return "unsupported_numeric_identifier"
+    if any(claim.startswith("unsupported_screw_identifier") for claim in claims):
+        return "unsupported_screw_identifier"
+    if int(validation.get("unsupported_claim_count") or 0) > 0:
+        return "unsupported_claim"
+    return None
+
+
+def _classify_llm_failure(message: str) -> str:
+    normalized = message.lower()
+    if "timed out" in normalized or "timeout" in normalized:
+        return "provider_timeout"
+    if "connection reset" in normalized or "winerror 10054" in normalized or "remote host" in normalized:
+        return "provider_connection_reset"
+    if "malformed_response" in normalized or "json" in normalized:
+        return "malformed_response"
+    if "missing_citation" in normalized:
+        return "missing_citation"
+    if "unsupported_citation" in normalized:
+        return "unsupported_citation"
+    return "provider_error" if "dashscope" in normalized or "request failed" in normalized else "llm_validation_failed"
 
 
 def _unsupported_identifiers(text: str, allowed: set[str]) -> list[str]:
@@ -749,6 +1032,7 @@ def _final_result(
         + _citations_from_evidence(evidence)
         + (refusal.citations if refusal else [])
     )
+    normalized_validation = _normalize_validation(validation)
     return RepairPlanResult(
         status=status,
         clarification_needed=clarification_needed,
@@ -759,11 +1043,24 @@ def _final_result(
         evidence_bundle=evidence,
         repair_plan=repair_plan,
         citations=citations,
-        validation=validation,
+        validation=normalized_validation,
         refusal=refusal,
         generated_answer=generated_answer,
         metadata={"tool_call_count": len(tool_trace), "citation_count": len(citations)},
     )
+
+
+def _normalize_validation(validation: dict[str, Any]) -> dict[str, Any]:
+    normalized = dict(validation)
+    normalized.setdefault("provider_error", False)
+    normalized.setdefault("provider_error_recovered", False)
+    normalized.setdefault("unsupported_claims", [])
+    normalized.setdefault("unsupported_claim_count", len(normalized.get("unsupported_claims") or []))
+    normalized.setdefault("missing_citation_count", 0)
+    normalized.setdefault("llm_repair_attempted", False)
+    normalized.setdefault("llm_repair_succeeded", False)
+    normalized.setdefault("failure_reason", None)
+    return normalized
 
 
 def _citations_from_evidence(evidence: EvidenceBundle) -> list[dict[str, Any]]:

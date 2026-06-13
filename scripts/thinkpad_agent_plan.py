@@ -34,6 +34,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--output", default=None, help="Optional JSON output path.")
     parser.add_argument("--no-llm", action="store_true", help="Force deterministic evidence-only output.")
     parser.add_argument("--live-llm", action="store_true", help="Use configured live LLM for cited prose composition.")
+    parser.add_argument("--llm-repair-attempts", type=int, default=1)
     parser.add_argument("--use-retrieval", action="store_true", help="Include retrieval evidence in the plan.")
     parser.add_argument(
         "--require-live-retrieval",
@@ -64,6 +65,7 @@ def main() -> int:
             top_k=args.top_k,
             use_retrieval=bool(args.use_retrieval or args.require_live_retrieval),
             require_live_retrieval=bool(args.require_live_retrieval),
+            llm_repair_attempts=max(0, args.llm_repair_attempts),
         )
     except Exception as exc:
         print(f"ThinkPad agent planning failed: {exc}", file=sys.stderr)

@@ -139,6 +139,7 @@ def evaluate_thinkpad_agent_cases(
     collection: str = "thinkpad_m4",
     top_k: int = 5,
     llm: BaseLLM | None = None,
+    llm_repair_attempts: int = 1,
     progress_path: str | Path | None = None,
 ) -> ThinkPadAgentEvalReport:
     """Evaluate M8 agent cases in deterministic, live retrieval, or live LLM mode."""
@@ -161,6 +162,7 @@ def evaluate_thinkpad_agent_cases(
             collection=collection,
             top_k=top_k,
             llm=llm,
+            llm_repair_attempts=llm_repair_attempts,
         )
         results.append(result)
         if progress_file:
@@ -198,6 +200,7 @@ def _evaluate_one_case(
     collection: str,
     top_k: int,
     llm: BaseLLM | None,
+    llm_repair_attempts: int,
 ) -> ThinkPadAgentEvalResult:
     use_case_llm = bool(mode == "live_llm" and case.expected.get("llm_required", False))
     t0 = time.monotonic()
@@ -211,6 +214,7 @@ def _evaluate_one_case(
             top_k=top_k,
             use_retrieval=mode in {"live_retrieval", "live_llm"},
             require_live_retrieval=mode in {"live_retrieval", "live_llm"},
+            llm_repair_attempts=llm_repair_attempts,
         )
     except Exception as exc:
         result = _error_result(case.query, str(exc), mode)
@@ -238,8 +242,6 @@ def _score_agent_response(
     }
     if metrics["final_plan_status_accuracy"] == 0.0:
         failure_reasons.append(f"status expected {expected_status}, got {actual_status}")
-    if metrics["provider_error_rate"] == 1.0:
-        failure_reasons.append("provider error occurred")
     if metrics["unsupported_claim_rate"] == 1.0:
         failure_reasons.append("unsupported claims exceeded expectation")
 

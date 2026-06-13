@@ -1106,3 +1106,62 @@ M8 can begin with a small repair-planning agent that orchestrates the existing r
 ### Handoff
 
 M8 is ready for milestone commit after final whitespace and secret checks. M9 should focus on packaging and interview readiness, but the highest-value M8 remediation before demo polish is live LLM composer hardening: retry, stricter structured output, and component alias cleanup from stress failures.
+
+---
+
+## M8.1: Agent Reliability Remediation
+
+- Date: 2026-06-13
+- User goal: Remediate M8 live LLM generation failures and stress benchmark failures before M9, without adding MCP tools or hiding provider failures.
+- Scope included: LLM composition validation, evidence-only deterministic repair fallback, provider-error scoring semantics, stress pseudo-FRU filtering, component alias cleanup, before/after reports, tests, and live DashScope validation.
+- Scope excluded: new `plan_repair` MCP tool, new HMM downloads, committed `data/`, committed provider traces, committed `docs/INTERVIEW_NOTES.md`, production packaging.
+
+### File-Level Changes
+
+| Change | Path | Implementation Fact |
+|---|---|---|
+| Modified | `src/thinkpad/agent.py` | Added `llm_repair_attempts`, strict JSON LLM composition prompt, validation failure classification, deterministic evidence-only repair fallback, recovered provider-error metadata, and component aliases for wireless-WAN/LAN and I/O bracket forms. |
+| Modified | `src/thinkpad/agent_evaluation.py` | Passed `llm_repair_attempts` through evaluator and changed provider-error scoring so provider errors remain metrics but do not fail a case when status/evidence/citations are valid. |
+| Modified | `scripts/thinkpad_agent_evaluate.py` | Added `--llm-repair-attempts`. |
+| Modified | `scripts/thinkpad_agent_plan.py` | Added `--llm-repair-attempts`. |
+| Modified | `scripts/thinkpad_generate_agent_eval_candidates.py` | Added stress candidate filtering for diagnostic pseudo-FRUs such as invalid machine UUID and system configuration entries. |
+| Modified | `tests/thinkpad/test_agent.py` | Added tests for LLM repair, hard failure on unsupported identifiers, provider-error recovery without secret leakage, and pseudo-FRU filtering. |
+| Added | `docs/M8_1_REMEDIATION_REPORT.md` | Added canonical M8.1 before/after report. |
+| Modified | `docs/EVAL_REPORT.md` | Added M8.1 summary metrics and interpretation. |
+| Modified | `docs/EXPERIMENTS.md` | Added M8.1 unit, deterministic, live retrieval, live LLM, and stress experiment records. |
+| Modified | `docs/IMPLEMENTATION_LOG.md` | Added this M8.1 implementation fact record. |
+| Modified locally, not committed | `docs/INTERVIEW_NOTES.md` | Added M8.1 interview notes on generation remediation and provider fallback semantics. |
+
+### Scripts And Commands
+
+| Script/Command | Purpose | Result |
+|---|---|---|
+| `.\.venv\Scripts\python -m pytest tests\thinkpad\test_agent.py tests\thinkpad\test_agent_evaluation.py -q --basetemp data\tmp\pytest_m8_1_focused3 -p no:cacheprovider` | Focused agent/evaluator tests after remediation. | Passed, 13 tests. |
+| `.\.venv\Scripts\ruff check src\thinkpad\agent.py src\thinkpad\agent_evaluation.py scripts\thinkpad_agent_evaluate.py scripts\thinkpad_agent_plan.py scripts\thinkpad_generate_agent_eval_candidates.py tests\thinkpad\test_agent.py tests\thinkpad\test_agent_evaluation.py` | Focused lint. | Passed. |
+| `.\.venv\Scripts\python scripts\thinkpad_agent_evaluate.py --golden-set tests\fixtures\thinkpad_m8_agent_golden_set.json --manifest data\manifests\manuals_manifest.yaml --extracted-dir data\extracted\m3 --collection thinkpad_m4 --mode deterministic --output data\eval\m8_1_agent_report_deterministic.json` | M8.1 deterministic 96-case regression. | Passed; 96 cases, 0 failures. |
+| `.\.venv\Scripts\python scripts\thinkpad_agent_evaluate.py --golden-set tests\fixtures\thinkpad_m8_agent_golden_set.json --manifest data\manifests\manuals_manifest.yaml --extracted-dir data\extracted\m3 --collection thinkpad_m4 --require-live-retrieval --output data\eval\m8_1_agent_report_live_retrieval.json` | M8.1 live retrieval 96-case regression. | Passed; 96 cases, 0 failures, fallback rate 0.1354. |
+| `.\.venv\Scripts\python scripts\thinkpad_agent_evaluate.py --golden-set tests\fixtures\thinkpad_m8_agent_golden_set.json --manifest data\manifests\manuals_manifest.yaml --extracted-dir data\extracted\m3 --collection thinkpad_m4 --live-llm --llm-repair-attempts 1 --output data\eval\m8_1_agent_report_live_llm.json` | M8.1 live LLM 96-case validation. | Passed; 96 cases, 0 failures, `llm_citation_preservation=1.0000`, `unsupported_claim_rate=0.0000`. |
+| `.\.venv\Scripts\python scripts\thinkpad_generate_agent_eval_candidates.py --manifest data\manifests\manuals_manifest.yaml --extracted-dir data\extracted\m3 --output data\eval\m8_1_agent_stress_candidates.json --per-manual 32` | Regenerate ignored local stress candidates after pseudo-FRU filtering. | Passed; 194 stress cases. |
+| `.\.venv\Scripts\python scripts\thinkpad_agent_evaluate.py --golden-set data\eval\m8_1_agent_stress_candidates.json --manifest data\manifests\manuals_manifest.yaml --extracted-dir data\extracted\m3 --collection thinkpad_m4 --mode deterministic --output data\eval\m8_1_agent_stress_report_deterministic.json` | M8.1 deterministic stress validation. | Completed; 194 cases, 10 failures, down from 17. |
+| `.\.venv\Scripts\python scripts\thinkpad_agent_evaluate.py --golden-set data\eval\m8_1_agent_stress_candidates.json --manifest data\manifests\manuals_manifest.yaml --extracted-dir data\extracted\m3 --collection thinkpad_m4 --require-live-retrieval --output data\eval\m8_1_agent_stress_report_live_retrieval.json` | M8.1 live retrieval stress validation. | Completed; 194 cases, 10 failures, fallback rate 0.0258. |
+
+### Before And After Evidence
+
+| Run | M8 Failed | M8.1 Failed | Key Change |
+|---|---:|---:|---|
+| Deterministic 96-case | 0 | 0 | No regression. |
+| Live retrieval 96-case | 0 | 0 | Provider fallback remains visible. |
+| Live LLM 96-case | 5 | 0 | Evidence-only repair fallback recovers malformed/missing-citation/provider failures. |
+| Stress deterministic 194-case | 17 | 10 | Pseudo-FRU filtering and aliases reduce candidate noise. |
+| Stress live retrieval 194-case | 17 | 10 | Remaining failures are structured-procedure alias/applicability gaps. |
+
+### Deviations And Risks
+
+- A first strict-JSON-only live LLM attempt made failures worse, increasing live LLM failures to 32. That run was discarded as an implementation dead end and replaced with deterministic evidence-only fallback after validation.
+- A sandboxed live run produced `WinError 10013` socket-permission failures. Valid live results were rerun with network access enabled.
+- Provider errors are still counted in `provider_error_rate`; they no longer automatically fail a case when fallback produces valid status, citations, and identifiers.
+- Remaining stress failures are not hidden. They are non-gold stress findings around USB board, wireless WAN/LAN, and power button/fingerprint reader procedure aliases.
+
+### Handoff
+
+M8.1 closes the M8 live LLM golden-set blocker. M9 can proceed to packaging and interview readiness, but demo materials should keep provider fallback metrics visible and should not claim stress coverage is fully clean.

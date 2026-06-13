@@ -50,6 +50,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--progress-jsonl", default=None, help="Optional per-case progress JSONL path.")
     parser.add_argument("--offset", type=int, default=0, help="Skip the first N cases.")
     parser.add_argument("--limit", type=int, default=None, help="Evaluate at most N cases after offset.")
+    parser.add_argument("--llm-repair-attempts", type=int, default=1)
     return parser.parse_args()
 
 
@@ -86,6 +87,7 @@ def main() -> int:
             collection=args.collection,
             top_k=args.top_k,
             llm=llm,
+            llm_repair_attempts=max(0, args.llm_repair_attempts),
             progress_path=args.progress_jsonl,
         )
     except Exception as exc:

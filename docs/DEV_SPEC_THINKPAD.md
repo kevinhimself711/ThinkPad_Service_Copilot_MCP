@@ -572,6 +572,7 @@ plan_thinkpad_repair(
     top_k: int = 5,
     use_retrieval: bool = False,
     require_live_retrieval: bool = False,
+    llm_repair_attempts: int = 1,
 ) -> RepairPlanResult
 ```
 
@@ -592,6 +593,24 @@ Behavior rules:
 - The LLM, when enabled, may rewrite evidence into readable prose but must not invent evidence outside the bundle.
 - Every repair-plan step must contain citations. Missing citations are validation failures.
 - Live retrieval is optional and explicit. Deterministic mode remains the default path for reproducible testing.
+- `llm_repair_attempts` only applies to live LLM composition. Deterministic and retrieval-only runs must not call the LLM.
+- If live LLM output is malformed, misses citations, or a provider call fails, the agent may use a bounded evidence-only normalizer built from the existing `EvidenceBundle`. The normalizer cannot add new FRU IDs, screw specs, torque values, error codes, warnings, or citations.
+
+Validation metadata:
+
+```json
+{
+  "llm_repair_attempted": false,
+  "llm_repair_succeeded": false,
+  "failure_reason": null,
+  "provider_error": false,
+  "provider_error_recovered": false,
+  "unsupported_claim_count": 0,
+  "missing_citation_count": 0
+}
+```
+
+Recovered provider failures still remain visible in metrics and reports. They should not automatically fail a case when final status, citations, required identifiers, and evidence coverage remain valid.
 
 CLIs:
 
@@ -625,3 +644,10 @@ Known M8 baseline result:
 - Deterministic 96-case and live retrieval 96-case runs passed the committed golden set.
 - Live LLM 96-case run completed but had 5 failures, with `llm_citation_preservation=0.8611`, `provider_error_rate=0.0521`, and `unsupported_claim_rate=0.0521`.
 - These failures are recorded as real generated-plan/provider issues, not hidden by weakening the golden set.
+
+M8.1 remediation result:
+
+- LLM composition now uses strict JSON output, deterministic validation, one bounded repair attempt by default, and evidence-only fallback for malformed/missing-citation/provider-failure cases.
+- Live LLM 96-case run improved from 5 failed to 0 failed, with `llm_citation_preservation=1.0000` and `unsupported_claim_rate=0.0000`.
+- Stress failures decreased from 17 to 10 after filtering diagnostic pseudo-FRU candidates and expanding component alias normalization.
+- Remaining stress failures are not gold-set failures. They identify future alias/procedure-applicability cleanup targets before exposing a public `plan_repair` MCP tool.

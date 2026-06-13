@@ -1250,3 +1250,123 @@ Commands and results:
 | `.\.venv\Scripts\ruff check src\thinkpad src\mcp_server\tools\thinkpad_tools.py tests\thinkpad scripts\thinkpad_*.py` | Passed. |
 
 Decision: M8 implementation and docs are ready for final whitespace/secret checks and milestone commit. Local `data/eval/` reports, provider traces, vector/index artifacts, and private interview notes remain uncommitted.
+
+## M8.1-001: Agent Composer Hardening Unit Tests
+
+- Date: 2026-06-13
+- Hypothesis: LLM composition failures can be separated into malformed output, missing citation, unsupported claim, provider error, and recovered provider error without weakening deterministic agent behavior.
+
+Commands and results:
+
+| Command | Result |
+|---|---|
+| `.\.venv\Scripts\python -m pytest tests\thinkpad\test_agent.py tests\thinkpad\test_agent_evaluation.py -q --basetemp data\tmp\pytest_m8_1_focused3 -p no:cacheprovider` | Passed, 13 tests. |
+| `.\.venv\Scripts\ruff check src\thinkpad\agent.py src\thinkpad\agent_evaluation.py scripts\thinkpad_agent_evaluate.py scripts\thinkpad_agent_plan.py scripts\thinkpad_generate_agent_eval_candidates.py tests\thinkpad\test_agent.py tests\thinkpad\test_agent_evaluation.py` | Passed. |
+
+Decision: The local evidence normalizer may recover malformed/missing-citation/provider failures, but unsupported identifiers remain hard failures.
+
+## M8.1-002: Deterministic And Stress Remediation Runs
+
+- Date: 2026-06-13
+- Hypothesis: M8.1 changes should preserve deterministic 96-case behavior and reduce stress candidate noise by filtering diagnostic pseudo-FRUs.
+
+Commands:
+
+```powershell
+.\.venv\Scripts\python scripts\thinkpad_agent_evaluate.py `
+  --golden-set tests\fixtures\thinkpad_m8_agent_golden_set.json `
+  --manifest data\manifests\manuals_manifest.yaml `
+  --extracted-dir data\extracted\m3 `
+  --collection thinkpad_m4 `
+  --mode deterministic `
+  --output data\eval\m8_1_agent_report_deterministic.json
+
+.\.venv\Scripts\python scripts\thinkpad_generate_agent_eval_candidates.py `
+  --manifest data\manifests\manuals_manifest.yaml `
+  --extracted-dir data\extracted\m3 `
+  --output data\eval\m8_1_agent_stress_candidates.json `
+  --per-manual 32
+
+.\.venv\Scripts\python scripts\thinkpad_agent_evaluate.py `
+  --golden-set data\eval\m8_1_agent_stress_candidates.json `
+  --manifest data\manifests\manuals_manifest.yaml `
+  --extracted-dir data\extracted\m3 `
+  --collection thinkpad_m4 `
+  --mode deterministic `
+  --output data\eval\m8_1_agent_stress_report_deterministic.json
+```
+
+Results:
+
+| Run | Cases | Failed | Pass Rate |
+|---|---:|---:|---:|
+| M8.1 deterministic gold | 96 | 0 | 1.0000 |
+| M8.1 stress deterministic | 194 | 10 | 0.9485 |
+
+Decision: deterministic gold behavior is preserved, and stress failures drop from 17 to 10 after pseudo-FRU filtering and alias cleanup.
+
+## M8.1-003: Live Retrieval And Live LLM Validation
+
+- Date: 2026-06-13
+- Hypothesis: Unsandboxed DashScope live runs should preserve M8.1 golden-set correctness while recording provider fallback/error rates.
+- Note: A sandboxed live LLM attempt produced many `WinError 10013` socket-permission failures and is not used as the valid live result. The accepted result below was run with network access enabled.
+
+Commands:
+
+```powershell
+.\.venv\Scripts\python scripts\thinkpad_agent_evaluate.py `
+  --golden-set tests\fixtures\thinkpad_m8_agent_golden_set.json `
+  --manifest data\manifests\manuals_manifest.yaml `
+  --extracted-dir data\extracted\m3 `
+  --collection thinkpad_m4 `
+  --require-live-retrieval `
+  --output data\eval\m8_1_agent_report_live_retrieval.json
+
+.\.venv\Scripts\python scripts\thinkpad_agent_evaluate.py `
+  --golden-set tests\fixtures\thinkpad_m8_agent_golden_set.json `
+  --manifest data\manifests\manuals_manifest.yaml `
+  --extracted-dir data\extracted\m3 `
+  --collection thinkpad_m4 `
+  --live-llm `
+  --llm-repair-attempts 1 `
+  --output data\eval\m8_1_agent_report_live_llm.json
+```
+
+Results:
+
+| Run | Cases | Failed | Pass Rate | Provider Error Rate | Retrieval Fallback Rate | p95 Latency |
+|---|---:|---:|---:|---:|---:|---:|
+| M8.1 live retrieval gold | 96 | 0 | 1.0000 | 0.0000 | 0.1354 | 9140 ms |
+| M8.1 live LLM gold | 96 | 0 | 1.0000 | 0.0104 | 0.0000 | 90015 ms |
+
+Decision: M8.1 closes the M8 live LLM golden-set failure. Provider fallback/error rates remain visible and should be included in demo caveats.
+
+## M8.1-004: Stress Live Retrieval
+
+- Date: 2026-06-13
+- Hypothesis: Live retrieval should not hide remaining stress FRU procedure failures after candidate cleanup.
+
+Command:
+
+```powershell
+.\.venv\Scripts\python scripts\thinkpad_agent_evaluate.py `
+  --golden-set data\eval\m8_1_agent_stress_candidates.json `
+  --manifest data\manifests\manuals_manifest.yaml `
+  --extracted-dir data\extracted\m3 `
+  --collection thinkpad_m4 `
+  --require-live-retrieval `
+  --output data\eval\m8_1_agent_stress_report_live_retrieval.json
+```
+
+Result:
+
+| Metric | Value |
+|---|---:|
+| Cases | 194 |
+| Failed cases | 10 |
+| `passed_case_rate` | 0.9485 |
+| `citation_accuracy` | 0.9794 |
+| `evidence_identifier_coverage` | 0.9731 |
+| `retrieval_fallback_rate` | 0.0258 |
+
+Remaining failures are clustered in USB board, wireless WAN/LAN, and power button / fingerprint reader procedure candidates. These remain non-gold stress findings.
