@@ -33,3 +33,22 @@ def test_extract_warning_records_emits_cited_safety_markers():
     assert "SAFETY_RELATED" in levels
     assert "CAUTION" in levels
     assert all(warning.citation.page_start == 10 for warning in warnings)
+
+
+def test_extract_warning_records_ignores_toc_battery_mentions():
+    page = HMMPage(
+        manual_id="thinkpad_e15_gen2_hmm",
+        page=3,
+        source_url="https://download.lenovo.com/pccbbs/mobiles_pdf/e15_hmm.pdf",
+        text=(
+            "Contents\n"
+            "Chapter 1. Safety information . . . . . . 1\n"
+            "Checking the built-in battery . . . . . . 51\n"
+            "Checking the coin-cell battery . . . . . . 52\n"
+            "Important notice for replacing a system board . . . . . . 20\n"
+        ),
+    )
+
+    warnings = extract_warning_records(_manual(), [page])
+
+    assert warnings == []

@@ -82,7 +82,7 @@ Do not rewrite the generic MCP server, vector store layer, dashboard, provider a
 
 ## 3. Current Repository Reality
 
-The repository has completed M0-M8.2 and is ready for M9 packaging/interview-readiness work only if demo/README claims clearly distinguish contract regression, raw live provider quality, recovered user-visible success, and strict citation quality.
+The repository has completed M0-M8.4c and is ready for M9 packaging/interview-readiness work only if demo/README claims clearly distinguish contract regression, raw live provider quality, recovered user-visible success, human-gold coverage, and strict citation quality.
 
 Current milestone status:
 
@@ -101,11 +101,17 @@ Current milestone status:
 | M8 | Complete with risk | Local repair-planning agent, 96-case benchmark, live retrieval baseline, live LLM baseline, and stress benchmark are implemented; the initial live LLM baseline had 5 recorded failures. |
 | M8.1 | Complete with risk | LLM composition hardening, deterministic evidence-only repair fallback, provider-failure classification, and stress candidate cleanup are implemented; 96-case live LLM now passes, while generated stress cases still show component alias gaps. |
 | M8.2 | Complete with risk | Strict/raw anti-inflation benchmark is implemented; 120-case strict runs show much lower raw LLM and strict-citation metrics, clarifying that M8.1 1.0 is contract-level. |
+| M8.3 | Complete with risk | Strict evaluator semantics, aliases, unsupported-generation handling, and repair-step planning were remediated; raw live LLM strict still had provider timeout/error risk. |
+| M8.4a | Complete | Human gold review pack generation is implemented; local review artifacts remain ignored. |
+| M8.4b | Complete with risk | Human gold fixture and FRU page scoring were added; human review exposed dependency-chain routing and warning false-positive issues. |
+| M8.4c | Complete with risk | Dependency-chain routing, safety TOC filtering, replacement warning cases, and required live baselines are complete; raw live LLM strict still has provider-timeout failures. |
 
 Canonical audit report: `docs/M0_M7_PROGRESS_AUDIT.md`.
 Canonical M8 performance report: `docs/M8_AGENT_PERFORMANCE_BASELINE.md`.
 Canonical M8.1 remediation report: `docs/M8_1_REMEDIATION_REPORT.md`.
 Canonical M8.2 evaluation reality-check report: `docs/M8_2_EVAL_REALITY_CHECK.md`.
+Canonical M8.3 optimization report: `docs/M8_3_OPTIMIZATION_REPORT.md`.
+Canonical M8.4 human gold report: `docs/M8_4_HUMAN_GOLD_REPORT.md`.
 
 Canonical paths:
 
@@ -501,14 +507,15 @@ Do not claim a test passed unless it was run.
 
 ## 16. Open Risks
 
-Current risks carried forward after M8.2:
+Current risks carried forward after M8.4c:
 
 - M1/M3 extraction artifacts are structured candidates, not fully human-audited gold facts.
 - Figure and diagram records are useful retrieval targets, but exact specs must still come from text/table evidence.
 - Some M3-derived stress cases still expose component alias and procedure-applicability gaps.
-- M4/M6/M7/M8 golden metrics are scoped to committed fixtures and do not represent every possible technician query.
-- M8.1 live LLM generation passes the 96-case committed fixture after recovery, but M8.2 raw live LLM strict scoring is low and must not be overclaimed.
-- M8.2 strict citation scoring shows the current fixture does not yet encode per-step expected citation pages/record types cleanly enough for final generated repair-answer claims.
+- M4/M6/M7/M8/M8.4 golden metrics are scoped to committed fixtures and do not represent every possible technician query.
+- M8.4c deterministic and live retrieval baselines are clean on the human-gold and 120-case fixtures, but this remains benchmark-contract evidence, not open-world repair-answer accuracy.
+- M8.4c raw live LLM strict still has provider-timeout failures: 2/18 on human gold and 2/120 on the generated regression fixture.
+- Raw LLM-only planning should not be exposed as the default; deterministic validation and evidence fallback remain required for demo/user-facing behavior.
 - The local manifest and local index contain real operational metadata/artifacts, but committed examples must remain safe and copyright-light.
 
 Engineering response:

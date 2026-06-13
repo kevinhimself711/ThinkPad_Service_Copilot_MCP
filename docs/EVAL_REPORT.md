@@ -728,3 +728,44 @@ Do not proceed directly to full M9 packaging. Next recommended step is M8.4c:
 - tighten safety warning extraction to avoid TOC false positives,
 - regenerate/review replacement warning candidates,
 - rerun M8.4 human gold deterministic strict and live retrieval when `DASHSCOPE_API_KEY` is available.
+
+## M8.4c Human Gold Live Baseline Closeout
+
+- Date: 2026-06-13
+- Milestone: M8.4c Human Gold Live Baseline Closeout
+- Canonical report: `docs/M8_4_HUMAN_GOLD_REPORT.md`
+- Raw local reports: ignored under `data/eval/`
+- Scope: dependency-chain intent remediation, safety TOC false-positive filtering, replacement warning gold cases, deterministic/live retrieval/raw live LLM strict baselines
+
+### Fixes
+
+M8.4c fixes the two blockers found by M8.4b:
+
+- Dependency-chain phrasing such as `prerequisite chain`, `dependency chain`, `required FRUs`, and `before removing` now routes to `get_fru_dependency_chain`.
+- Safety extraction skips table-of-contents/index pages before broad battery/system-board marker matching, preventing page-3 battery-warning false positives.
+
+The M8.2 120-case fixture was updated for `fru_dependency_chain` cases to expect direct graph evidence instead of a procedure/diagram/safety plan trajectory. This aligns the generated regression fixture with the human-gold routing decision.
+
+### Final Baselines
+
+| Run | Cases | Failed | Pass Rate | Provider Error | Raw LLM Success | p95 Latency |
+|---|---:|---:|---:|---:|---:|---:|
+| Human deterministic strict | 18 | 0 | 1.0000 | 0.0000 | n/a | 31 ms |
+| Human live retrieval strict | 18 | 0 | 1.0000 | 0.0000 | n/a | 1422 ms |
+| Human raw live LLM strict | 18 | 2 | 0.8889 | 0.1111 | 0.7778 | 61844 ms |
+| 120-case deterministic strict | 120 | 0 | 1.0000 | 0.0000 | n/a | 32 ms |
+| 120-case live retrieval strict | 120 | 0 | 1.0000 | 0.0000 | n/a | 1437 ms |
+| 120-case raw live LLM strict | 120 | 2 | 0.9833 | 0.0167 | 0.9583 | 43906 ms |
+
+Raw live LLM strict failures were all `provider_timeout` and are preserved as failures:
+
+- Human raw live LLM strict:
+  - `m8_4_thinkpad_x1_carbon_gen9_x1_yoga_gen6_hmm_fru_1020`
+  - `m8_4_thinkpad_p1_gen4_x1_extreme_gen4_hmm_chain_1030`
+- 120-case raw live LLM strict:
+  - `m8_fru_thinkpad_x1_carbon_gen10_x1_yoga_gen7_hmm_1030`
+  - `m8_2_cross_t14g3_not_g2`
+
+### Decision
+
+M8.4c closes the M8.4 live-baseline omission and removes the human-gold deterministic blockers. The project can proceed to M9 packaging and interview readiness, with this boundary: raw LLM-only repair planning is not the default demo path. M9 should present deterministic validated evidence planning and recovered LLM composition as the user-facing path, while reporting raw LLM strict metrics separately.

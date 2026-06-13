@@ -1779,12 +1779,9 @@
         ],
         "required_tools": [
           "resolve_thinkpad_model",
-          "get_fru_procedure",
-          "get_fru_dependency_chain",
-          "get_related_diagram",
-          "get_safety_warnings"
+          "get_fru_dependency_chain"
         ],
-        "safety_required": true,
+        "safety_required": false,
         "status": "ok"
       },
       "query": "ThinkPad T14 Gen 2 FRU 1030 dependency chain plan"
@@ -1811,12 +1808,9 @@
         ],
         "required_tools": [
           "resolve_thinkpad_model",
-          "get_fru_procedure",
-          "get_fru_dependency_chain",
-          "get_related_diagram",
-          "get_safety_warnings"
+          "get_fru_dependency_chain"
         ],
-        "safety_required": true,
+        "safety_required": false,
         "status": "ok"
       },
       "query": "ThinkPad T14 Gen 2 FRU 1040 dependency chain plan"
@@ -1843,12 +1837,9 @@
         ],
         "required_tools": [
           "resolve_thinkpad_model",
-          "get_fru_procedure",
-          "get_fru_dependency_chain",
-          "get_related_diagram",
-          "get_safety_warnings"
+          "get_fru_dependency_chain"
         ],
-        "safety_required": true,
+        "safety_required": false,
         "status": "ok"
       },
       "query": "ThinkPad T14 Gen 3 FRU 1030 dependency chain plan"
@@ -1875,12 +1866,9 @@
         ],
         "required_tools": [
           "resolve_thinkpad_model",
-          "get_fru_procedure",
-          "get_fru_dependency_chain",
-          "get_related_diagram",
-          "get_safety_warnings"
+          "get_fru_dependency_chain"
         ],
-        "safety_required": true,
+        "safety_required": false,
         "status": "ok"
       },
       "query": "ThinkPad T14 Gen 3 FRU 1040 dependency chain plan"
@@ -1907,12 +1895,9 @@
         ],
         "required_tools": [
           "resolve_thinkpad_model",
-          "get_fru_procedure",
-          "get_fru_dependency_chain",
-          "get_related_diagram",
-          "get_safety_warnings"
+          "get_fru_dependency_chain"
         ],
-        "safety_required": true,
+        "safety_required": false,
         "status": "ok"
       },
       "query": "ThinkPad T480 FRU 1020 dependency chain plan"
@@ -1939,12 +1924,9 @@
         ],
         "required_tools": [
           "resolve_thinkpad_model",
-          "get_fru_procedure",
-          "get_fru_dependency_chain",
-          "get_related_diagram",
-          "get_safety_warnings"
+          "get_fru_dependency_chain"
         ],
-        "safety_required": true,
+        "safety_required": false,
         "status": "ok"
       },
       "query": "ThinkPad T480 FRU 1030 dependency chain plan"
@@ -1971,12 +1953,9 @@
         ],
         "required_tools": [
           "resolve_thinkpad_model",
-          "get_fru_procedure",
-          "get_fru_dependency_chain",
-          "get_related_diagram",
-          "get_safety_warnings"
+          "get_fru_dependency_chain"
         ],
-        "safety_required": true,
+        "safety_required": false,
         "status": "ok"
       },
       "query": "ThinkPad T490 FRU 1030 dependency chain plan"
@@ -2003,12 +1982,9 @@
         ],
         "required_tools": [
           "resolve_thinkpad_model",
-          "get_fru_procedure",
-          "get_fru_dependency_chain",
-          "get_related_diagram",
-          "get_safety_warnings"
+          "get_fru_dependency_chain"
         ],
-        "safety_required": true,
+        "safety_required": false,
         "status": "ok"
       },
       "query": "ThinkPad T490 FRU 1040 dependency chain plan"
@@ -2035,12 +2011,9 @@
         ],
         "required_tools": [
           "resolve_thinkpad_model",
-          "get_fru_procedure",
-          "get_fru_dependency_chain",
-          "get_related_diagram",
-          "get_safety_warnings"
+          "get_fru_dependency_chain"
         ],
-        "safety_required": true,
+        "safety_required": false,
         "status": "ok"
       },
       "query": "ThinkPad X1 Carbon Gen 9 FRU 1020 dependency chain plan"
@@ -2067,12 +2040,9 @@
         ],
         "required_tools": [
           "resolve_thinkpad_model",
-          "get_fru_procedure",
-          "get_fru_dependency_chain",
-          "get_related_diagram",
-          "get_safety_warnings"
+          "get_fru_dependency_chain"
         ],
-        "safety_required": true,
+        "safety_required": false,
         "status": "ok"
       },
       "query": "ThinkPad X1 Carbon Gen 9 FRU 1030 dependency chain plan"
@@ -2099,12 +2069,9 @@
         ],
         "required_tools": [
           "resolve_thinkpad_model",
-          "get_fru_procedure",
-          "get_fru_dependency_chain",
-          "get_related_diagram",
-          "get_safety_warnings"
+          "get_fru_dependency_chain"
         ],
-        "safety_required": true,
+        "safety_required": false,
         "status": "ok"
       },
       "query": "ThinkPad X1 Carbon Gen 10 FRU 1020 dependency chain plan"
@@ -2131,12 +2098,9 @@
         ],
         "required_tools": [
           "resolve_thinkpad_model",
-          "get_fru_procedure",
-          "get_fru_dependency_chain",
-          "get_related_diagram",
-          "get_safety_warnings"
+          "get_fru_dependency_chain"
         ],
-        "safety_required": true,
+        "safety_required": false,
         "status": "ok"
       },
       "query": "ThinkPad X1 Carbon Gen 10 FRU 1030 dependency chain plan"

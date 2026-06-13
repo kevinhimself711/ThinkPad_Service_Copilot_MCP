@@ -107,6 +107,20 @@ def test_agent_component_aliases_resolve_to_hmm_fru_names() -> None:
     assert any(step.action == "Remove the base cover assembly." for step in lower_cover.repair_plan)
 
 
+def test_agent_dependency_chain_phrasing_calls_graph_tool() -> None:
+    service = _service_with_records()
+
+    result = plan_thinkpad_repair("21CB built-in battery prerequisite chain", service)
+
+    assert result.status == "ok"
+    assert [trace.tool for trace in result.tool_trace] == [
+        "resolve_thinkpad_model",
+        "get_fru_dependency_chain",
+    ]
+    assert result.evidence_bundle.dependency_chain
+    assert any(step.evidence_type == "fru_dependency_chain" for step in result.repair_plan)
+
+
 def test_agent_fake_llm_unsupported_identifier_is_marked() -> None:
     service = _service_with_records()
 

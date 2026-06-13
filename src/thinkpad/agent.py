@@ -343,7 +343,7 @@ def plan_thinkpad_repair(
             primary_status = response.get("status", "not_found")
             primary_message = response.get("message") or "No screw-spec evidence found."
 
-    if intent.kind in {"procedure", "diagram", "safety"}:
+    if intent.kind in {"procedure", "diagram", "safety", "dependency_chain"}:
         component = intent.component or query
         if intent.kind == "procedure":
             response, trace = _call_tool(
@@ -364,6 +364,18 @@ def plan_thinkpad_repair(
             )
             calls.append(trace)
             evidence = _append_evidence(evidence, dependency_chain=chain_response.get("results") or [])
+
+        if intent.kind == "dependency_chain":
+            chain_response, trace = _call_tool(
+                "get_fru_dependency_chain",
+                service.get_fru_dependency_chain,
+                {"model": query, "component_or_fru": component, "max_depth": 10},
+            )
+            calls.append(trace)
+            evidence = _append_evidence(evidence, dependency_chain=chain_response.get("results") or [])
+            if chain_response.get("status") != "ok":
+                primary_status = chain_response.get("status", "not_found")
+                primary_message = chain_response.get("message") or "No FRU dependency-chain evidence found."
 
         if intent.kind in {"procedure", "diagram"}:
             diagram_response, trace = _call_tool(
@@ -519,6 +531,11 @@ def _detect_intent(query: str) -> _Intent:
             screw_query=(screw_match.group(0) if screw_match else None) or (torque_match.group(0) if torque_match else None),
         )
 
+    if _is_dependency_chain_query(normalized):
+        fru_match = _FRU_ID_RE.search(query)
+        component = fru_match.group(1) if fru_match and "error" not in normalized else _detect_component(normalized)
+        return _Intent(kind="dependency_chain", component=component)
+
     if any(term in normalized for term in ("diagram", "figure", "drawing")):
         return _Intent(kind="diagram", component=_detect_component(normalized))
     if any(term in normalized for term in ("warning", "safety", "danger", "caution", "esd")):
@@ -537,6 +554,18 @@ def _detect_component(normalized_query: str) -> str | None:
         if re.search(pattern, normalized_query):
             return component
     return None
+
+
+def _is_dependency_chain_query(normalized_query: str) -> bool:
+    patterns = (
+        r"\bprerequisite(?:\s+fru)?\s+chain\b",
+        r"\bdependency\s+chain\b",
+        r"\brequired\s+frus?\b",
+        r"\bfrus?\s+(?:required|needed)\b",
+        r"\bbefore\s+(?:removing|replacing|servicing)\b",
+        r"\bwhat\s+(?:must|should)\s+(?:be\s+)?(?:removed|done)\s+before\b",
+    )
+    return any(re.search(pattern, normalized_query) for pattern in patterns)
 
 
 def _is_unsupported_resolution(response: dict[str, Any]) -> bool:

@@ -1838,3 +1838,221 @@ Result:
 | `ruff check ...` | Passed. |
 
 Live provider note: `DASHSCOPE_API_KEY` was not present in the current shell, so M8.4b did not run live DashScope. No key was written into commands, docs, or local files.
+
+## M8.4c-001: Dependency-Chain Routing And Safety TOC Filtering
+
+- Date: 2026-06-13
+- Hypothesis: M8.4b human-gold dependency-chain failures are caused by agent intent routing, not by graph evidence, and warning false positives are caused by TOC/index pages entering safety extraction.
+
+Focused commands:
+
+```powershell
+.\.venv\Scripts\python -m pytest tests\thinkpad\test_agent.py tests\thinkpad\test_safety.py tests\thinkpad\test_agent_evaluation.py -q --basetemp data\tmp\pytest_m8_4c_focused
+```
+
+Result:
+
+| Command | Result |
+|---|---|
+| focused agent/safety/evaluator tests | Passed, 24 tests. |
+
+Decision: route dependency-chain intent directly to `get_fru_dependency_chain`; skip TOC/index pages before broad safety marker matching.
+
+## M8.4c-002: Human Gold Deterministic Strict
+
+- Date: 2026-06-13
+- Hypothesis: after routing and replacement warning fixes, the human-gold deterministic gate should pass without hiding the previous M8.4b failures.
+
+Command:
+
+```powershell
+.\.venv\Scripts\python scripts\thinkpad_agent_evaluate.py --golden-set tests\fixtures\thinkpad_m8_4_human_gold_set.json --manifest data\manifests\manuals_manifest.yaml --extracted-dir data\extracted\m3 --collection thinkpad_m4 --mode deterministic --strict-citation --output data\eval\m8_4c_human_det_strict.json
+```
+
+Result:
+
+| Metric | Value |
+|---|---:|
+| Cases | 18 |
+| Failed cases | 0 |
+| `passed_case_rate` | 1.0000 |
+| `strict_citation_accuracy` | 1.0000 |
+| `required_tool_coverage` | 1.0000 |
+| `trajectory_tool_sequence_accuracy` | 1.0000 |
+
+Decision: M8.4b human-gold deterministic blockers are fixed. The fixture now includes 3 replacement `human_warning` cases.
+
+## M8.4c-003: 120-Case Deterministic Strict Regression
+
+- Date: 2026-06-13
+- Hypothesis: the generated 120-case suite should remain clean after aligning dependency-chain expectations with direct graph routing.
+
+Command:
+
+```powershell
+.\.venv\Scripts\python scripts\thinkpad_agent_evaluate.py --golden-set tests\fixtures\thinkpad_m8_2_reality_golden_set.json --manifest data\manifests\manuals_manifest.yaml --extracted-dir data\extracted\m3 --collection thinkpad_m4 --mode deterministic --strict-citation --output data\eval\m8_4c_120_det_strict.json
+```
+
+Result:
+
+| Metric | Value |
+|---|---:|
+| Cases | 120 |
+| Failed cases | 0 |
+| `passed_case_rate` | 1.0000 |
+| `strict_citation_accuracy` | 1.0000 |
+| `required_tool_coverage` | 1.0000 |
+| `trajectory_tool_sequence_accuracy` | 1.0000 |
+
+Decision: direct graph routing does not reduce evidence quality; it corrects the expected trajectory for chain-only queries.
+
+## M8.4c-004: Human Gold Live Retrieval Strict
+
+- Date: 2026-06-13
+- Hypothesis: with DashScope enabled, live retrieval should not regress the human-gold evidence contract.
+
+Command:
+
+```powershell
+$env:DASHSCOPE_API_KEY = "<local only>"
+.\.venv\Scripts\python scripts\thinkpad_agent_evaluate.py --golden-set tests\fixtures\thinkpad_m8_4_human_gold_set.json --manifest data\manifests\manuals_manifest.yaml --extracted-dir data\extracted\m3 --collection thinkpad_m4 --require-live-retrieval --strict-citation --output data\eval\m8_4c_human_live_retrieval_strict.json
+```
+
+Result:
+
+| Metric | Value |
+|---|---:|
+| Cases | 18 |
+| Failed cases | 0 |
+| `passed_case_rate` | 1.0000 |
+| `provider_error_rate` | 0.0000 |
+| `retrieval_fallback_rate` | 0.0000 |
+| `latency_ms_p95` | 1422 ms |
+
+Decision: live retrieval is clean on the human-gold fixture.
+
+## M8.4c-005: Human Gold Raw Live LLM Strict
+
+- Date: 2026-06-13
+- Hypothesis: raw live LLM strict should be measured separately from recovered user-visible behavior and may expose provider instability.
+
+Command:
+
+```powershell
+$env:DASHSCOPE_API_KEY = "<local only>"
+.\.venv\Scripts\python scripts\thinkpad_agent_evaluate.py --golden-set tests\fixtures\thinkpad_m8_4_human_gold_set.json --manifest data\manifests\manuals_manifest.yaml --extracted-dir data\extracted\m3 --collection thinkpad_m4 --live-llm --strict-live-llm --strict-citation --progress-jsonl data\eval\m8_4c_human_raw_live_llm_progress.jsonl --output data\eval\m8_4c_human_raw_live_llm_strict.json
+```
+
+Result:
+
+| Metric | Value |
+|---|---:|
+| Cases | 18 |
+| Failed cases | 2 |
+| `passed_case_rate` | 0.8889 |
+| `raw_llm_success_rate` | 0.7778 |
+| `llm_citation_preservation` | 0.7778 |
+| `provider_error_rate` | 0.1111 |
+| `unsupported_claim_rate` | 0.0000 |
+| `latency_ms_p95` | 61844 ms |
+
+Failures:
+
+- `m8_4_thinkpad_x1_carbon_gen9_x1_yoga_gen6_hmm_fru_1020`: `provider_timeout`
+- `m8_4_thinkpad_p1_gen4_x1_extreme_gen4_hmm_chain_1030`: `provider_timeout`
+
+Decision: raw live LLM is not clean enough to be the default. Keep deterministic validation and evidence fallback as the user-facing path.
+
+## M8.4c-006: 120-Case Live Retrieval Strict
+
+- Date: 2026-06-13
+- Hypothesis: the 120-case regression suite should remain clean with live retrieval enabled.
+
+Command:
+
+```powershell
+$env:DASHSCOPE_API_KEY = "<local only>"
+.\.venv\Scripts\python scripts\thinkpad_agent_evaluate.py --golden-set tests\fixtures\thinkpad_m8_2_reality_golden_set.json --manifest data\manifests\manuals_manifest.yaml --extracted-dir data\extracted\m3 --collection thinkpad_m4 --require-live-retrieval --strict-citation --output data\eval\m8_4c_120_live_retrieval_strict.json
+```
+
+Result:
+
+| Metric | Value |
+|---|---:|
+| Cases | 120 |
+| Failed cases | 0 |
+| `passed_case_rate` | 1.0000 |
+| `provider_error_rate` | 0.0000 |
+| `retrieval_fallback_rate` | 0.0000 |
+| `latency_ms_p95` | 1437 ms |
+
+Decision: live retrieval remains clean at 120-case scale.
+
+## M8.4c-007: 120-Case Raw Live LLM Strict
+
+- Date: 2026-06-13
+- Hypothesis: raw live LLM strict should run at full 120-case scale, preserving provider failures instead of recovering them.
+
+Command shape:
+
+```powershell
+$env:DASHSCOPE_API_KEY = "<local only>"
+.\.venv\Scripts\python scripts\thinkpad_agent_evaluate.py --golden-set tests\fixtures\thinkpad_m8_2_reality_golden_set.json --manifest data\manifests\manuals_manifest.yaml --extracted-dir data\extracted\m3 --collection thinkpad_m4 --live-llm --strict-live-llm --strict-citation --offset <0|20|40|60|80|100> --limit 20 --progress-jsonl data\eval\m8_4c_120_raw_live_llm_strict_part_<offset>.jsonl --output data\eval\m8_4c_120_raw_live_llm_strict_part_<offset>.json
+```
+
+The six 20-case reports were combined into:
+
+```text
+data/eval/m8_4c_120_raw_live_llm_strict.json
+```
+
+Result:
+
+| Metric | Value |
+|---|---:|
+| Cases | 120 |
+| Failed cases | 2 |
+| `passed_case_rate` | 0.9833 |
+| `raw_llm_success_rate` | 0.9583 |
+| `llm_citation_preservation` | 0.9583 |
+| `provider_error_rate` | 0.0167 |
+| `unsupported_claim_rate` | 0.0000 |
+| `latency_ms_p95` | 43906 ms |
+
+Failures:
+
+- `m8_fru_thinkpad_x1_carbon_gen10_x1_yoga_gen7_hmm_1030`: `provider_timeout`
+- `m8_2_cross_t14g3_not_g2`: `provider_timeout`
+
+Decision: raw LLM quality is substantially stronger than M8.2, but provider timeout remains a real risk. Do not describe raw live LLM strict as perfect.
+
+## M8.4c-008: Regression Tests And Lint
+
+- Date: 2026-06-13
+- Hypothesis: M8.4c routing, safety, and fixture updates should not regress the broader codebase.
+
+Commands:
+
+```powershell
+.\.venv\Scripts\python -m pytest tests\thinkpad -q --basetemp data\tmp\pytest_m8_4c
+
+.\.venv\Scripts\python -m pytest tests\unit\test_smoke_imports.py -q
+
+.\.venv\Scripts\python -m pytest tests\e2e\test_dashboard_smoke.py -q
+
+.\.venv\Scripts\ruff check src\thinkpad scripts\thinkpad_*.py tests\thinkpad
+
+git diff --check
+```
+
+Result:
+
+| Command | Result |
+|---|---|
+| `pytest tests\thinkpad -q` | Passed, 109 tests. |
+| `pytest tests\unit\test_smoke_imports.py -q` | Passed, 22 tests. |
+| `pytest tests\e2e\test_dashboard_smoke.py -q` | Passed, 8 tests. |
+| `ruff check ...` | Passed. |
+| `git diff --check` | Passed with line-ending warnings only. |
+
+Decision: M8.4c is ready for commit after secret scan and documentation review.

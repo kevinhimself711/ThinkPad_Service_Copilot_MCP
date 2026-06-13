@@ -1401,3 +1401,68 @@ Root cause: the agent does not currently recognize "prerequisite chain" as a dep
 ### Handoff
 
 Do not proceed directly to full M9 packaging. The next recommended milestone is M8.4c: fix dependency-chain routing, tighten safety warning extraction, generate/review replacement warning candidates, and rerun the M8.4 human gold gate.
+
+---
+
+## M8.4c: Human Gold Live Baseline Closeout
+
+- Date: 2026-06-13
+- User goal: Complete the original M8.4 scope after M8.4b missed live testing; fix human-gold dependency-chain failures and warning false positives; run deterministic, live retrieval, and raw live LLM baselines.
+- Scope included: dependency-chain agent routing, safety TOC/index filtering, replacement warning cases in human gold, 120-case fixture expectation alignment, full deterministic/live baseline runs, tests, docs, and commit.
+- Scope excluded: new MCP `plan_repair` tool, M9 packaging, new HMM downloads, committed local `data/`, committed provider outputs, committed API key, committed `docs/INTERVIEW_NOTES.md`.
+
+### File-Level Changes
+
+| Change | Path | Implementation Fact |
+|---|---|---|
+| Modified | `src/thinkpad/agent.py` | Added dependency-chain intent recognition for `prerequisite chain`, `dependency chain`, `required FRUs`, `before removing`, and similar phrasing; routes these requests directly to `get_fru_dependency_chain`. |
+| Modified | `src/thinkpad/safety.py` | Added TOC/index-page filtering before safety marker extraction so battery mentions in contents pages do not become `WarningRecord` false positives. |
+| Modified | `tests/thinkpad/test_agent.py` | Added regression coverage proving dependency-chain phrasing calls `get_fru_dependency_chain` and returns dependency-chain evidence. |
+| Modified | `tests/thinkpad/test_safety.py` | Added regression coverage proving TOC battery mentions do not create warnings while existing true warning tests remain. |
+| Modified | `tests/fixtures/thinkpad_m8_4_human_gold_set.json` | Expanded the committed human-gold fixture from 15 to 18 cases by adding 3 replacement `human_warning` cases with verified pages. |
+| Modified | `tests/fixtures/thinkpad_m8_2_reality_golden_set.json` | Updated 12 `fru_dependency_chain` generated-regression cases to expect direct graph evidence instead of procedure/diagram/safety trajectory. |
+| Modified | `docs/M8_4_HUMAN_GOLD_REPORT.md` | Replaced the M8.4b-only report with the final M8.4a/b/c report and live baseline summary. |
+| Modified | `docs/EVAL_REPORT.md` | Added M8.4c final baseline metrics and decision. |
+| Modified | `docs/EXPERIMENTS.md` | Added M8.4c focused tests, deterministic runs, live retrieval runs, raw live LLM strict runs, and regression commands. |
+| Modified | `docs/IMPLEMENTATION_LOG.md` | Added this M8.4c implementation fact record. |
+| Modified locally, not committed | `docs/INTERVIEW_NOTES.md` | Added M8.4c interview notes about human gold, live baseline omission, routing failures, safety false positives, and raw-vs-recovered LLM metrics. |
+
+### Scripts And Commands
+
+| Script/Command | Purpose | Result |
+|---|---|---|
+| `.\.venv\Scripts\python -m pytest tests\thinkpad\test_agent.py tests\thinkpad\test_safety.py tests\thinkpad\test_agent_evaluation.py -q --basetemp data\tmp\pytest_m8_4c_focused` | Focused regression for routing, safety, and evaluator behavior. | Passed, 24 tests. |
+| `.\.venv\Scripts\python scripts\thinkpad_agent_evaluate.py --golden-set tests\fixtures\thinkpad_m8_4_human_gold_set.json --manifest data\manifests\manuals_manifest.yaml --extracted-dir data\extracted\m3 --collection thinkpad_m4 --mode deterministic --strict-citation --output data\eval\m8_4c_human_det_strict.json` | Human-gold deterministic strict baseline. | Completed; 18 cases, 0 failures. |
+| `.\.venv\Scripts\python scripts\thinkpad_agent_evaluate.py --golden-set tests\fixtures\thinkpad_m8_2_reality_golden_set.json --manifest data\manifests\manuals_manifest.yaml --extracted-dir data\extracted\m3 --collection thinkpad_m4 --mode deterministic --strict-citation --output data\eval\m8_4c_120_det_strict.json` | 120-case deterministic strict regression. | Completed; 120 cases, 0 failures. |
+| `.\.venv\Scripts\python scripts\thinkpad_agent_evaluate.py --golden-set tests\fixtures\thinkpad_m8_4_human_gold_set.json --manifest data\manifests\manuals_manifest.yaml --extracted-dir data\extracted\m3 --collection thinkpad_m4 --require-live-retrieval --strict-citation --output data\eval\m8_4c_human_live_retrieval_strict.json` | Human-gold live retrieval strict baseline using local-only `DASHSCOPE_API_KEY`. | Completed; 18 cases, 0 failures, provider error 0.0000. |
+| `.\.venv\Scripts\python scripts\thinkpad_agent_evaluate.py --golden-set tests\fixtures\thinkpad_m8_4_human_gold_set.json --manifest data\manifests\manuals_manifest.yaml --extracted-dir data\extracted\m3 --collection thinkpad_m4 --live-llm --strict-live-llm --strict-citation --progress-jsonl data\eval\m8_4c_human_raw_live_llm_progress.jsonl --output data\eval\m8_4c_human_raw_live_llm_strict.json` | Human-gold raw live LLM strict baseline. | Completed; 18 cases, 2 provider-timeout failures. |
+| `.\.venv\Scripts\python scripts\thinkpad_agent_evaluate.py --golden-set tests\fixtures\thinkpad_m8_2_reality_golden_set.json --manifest data\manifests\manuals_manifest.yaml --extracted-dir data\extracted\m3 --collection thinkpad_m4 --require-live-retrieval --strict-citation --output data\eval\m8_4c_120_live_retrieval_strict.json` | 120-case live retrieval strict baseline. | Completed; 120 cases, 0 failures, provider error 0.0000. |
+| `.\.venv\Scripts\python scripts\thinkpad_agent_evaluate.py --golden-set tests\fixtures\thinkpad_m8_2_reality_golden_set.json --manifest data\manifests\manuals_manifest.yaml --extracted-dir data\extracted\m3 --collection thinkpad_m4 --live-llm --strict-live-llm --strict-citation --offset <0/20/40/60/80/100> --limit 20 --progress-jsonl data\eval\m8_4c_120_raw_live_llm_strict_part_<offset>.jsonl --output data\eval\m8_4c_120_raw_live_llm_strict_part_<offset>.json` | 120-case raw live LLM strict baseline in six chunks. | Completed; combined 120 cases, 2 provider-timeout failures. |
+| Local inline Python report combiner | Combine six raw live LLM strict chunks into `data\eval\m8_4c_120_raw_live_llm_strict.json`. | Completed; report aggregate recomputed from all case results. |
+| `.\.venv\Scripts\python -m pytest tests\thinkpad -q --basetemp data\tmp\pytest_m8_4c` | Full ThinkPad regression. | Passed, 109 tests. |
+| `.\.venv\Scripts\python -m pytest tests\unit\test_smoke_imports.py -q` | Upstream/domain smoke import regression. | Passed, 22 tests. |
+| `.\.venv\Scripts\python -m pytest tests\e2e\test_dashboard_smoke.py -q` | Dashboard smoke regression. | Passed, 8 tests. |
+| `.\.venv\Scripts\ruff check src\thinkpad scripts\thinkpad_*.py tests\thinkpad` | Lint changed ThinkPad modules, scripts, and tests. | Passed. |
+| `git diff --check` | Whitespace validation. | Passed with line-ending warnings only. |
+
+### Evaluation Results
+
+| Run | Cases | Failed | Pass Rate | Provider Error | Raw LLM Success |
+|---|---:|---:|---:|---:|---:|
+| Human deterministic strict | 18 | 0 | 1.0000 | 0.0000 | n/a |
+| Human live retrieval strict | 18 | 0 | 1.0000 | 0.0000 | n/a |
+| Human raw live LLM strict | 18 | 2 | 0.8889 | 0.1111 | 0.7778 |
+| 120-case deterministic strict | 120 | 0 | 1.0000 | 0.0000 | n/a |
+| 120-case live retrieval strict | 120 | 0 | 1.0000 | 0.0000 | n/a |
+| 120-case raw live LLM strict | 120 | 2 | 0.9833 | 0.0167 | 0.9583 |
+
+### Deviations And Risks
+
+- M8.4b did not run live DashScope; M8.4c corrects that omission and records the true live results.
+- Raw live LLM strict still has provider-timeout failures. These are not hidden and should not be described as citation or retrieval failures.
+- Deterministic/live retrieval `1.0000` remains a benchmark-contract result, not open-world repair accuracy.
+- The DashScope key was used only as a transient environment variable in shell commands and was not written to repo files or committed artifacts.
+
+### Handoff
+
+M8.4c closes the original M8.4 gate. M9 can proceed as packaging and interview readiness, as long as the default repair-planning demo keeps deterministic validation and evidence fallback rather than raw LLM-only planning.

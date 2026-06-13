@@ -731,11 +731,12 @@ Artifacts:
 - Human gold report: `docs/M8_4_HUMAN_GOLD_REPORT.md`
 - Committed fixture: `tests/fixtures/thinkpad_m8_4_human_gold_set.json`
 
-M8.4a and M8.4b responsibilities:
+M8.4a, M8.4b, and M8.4c responsibilities:
 
 - M8.4a generates local ignored review artifacts under `data/eval/`.
 - A human reviewer verifies pages against local PDFs and records only short statuses/pages/notes.
 - M8.4b treats the reviewed Markdown as authoritative, accepts only `verified` and `corrected` cases, skips `rejected` cases, and commits a copyright-light fixture.
+- M8.4c fixes the dependency-chain routing and warning false-positive issues exposed by M8.4b, adds replacement verified warning cases, and runs the missing live baselines.
 - Positive accepted cases must have `verified_pages`; negative cases may remain page-free.
 - Rejected cases are not hidden. Their root causes must be documented as extraction or candidate-generation issues.
 
@@ -745,15 +746,23 @@ Strict page metric update:
 - `required_evidence_coverage` now uses per-step page coverage for `fru_procedure` repair steps when expected pages are present.
 - Warning, figure, and dependency-chain steps can legitimately cite different pages and are not penalized by the FRU procedure page coverage helper.
 
-Known M8.4b result:
+Known M8.4c result:
 
-- Human gold deterministic strict: 15 cases, 3 failures, pass rate 0.8000.
-- The 3 failures are all dependency-chain phrasing failures: the agent does not route "prerequisite chain" queries to `get_fru_dependency_chain`.
-- 120-case deterministic strict regression remains clean at pass rate 1.0000.
-- Three warning candidates were rejected as page-3 table-of-contents false positives from broad safety marker extraction.
+- Human gold deterministic strict: 18 cases, 0 failures, pass rate 1.0000.
+- Human gold live retrieval strict: 18 cases, 0 failures, provider error rate 0.0000.
+- Human gold raw live LLM strict: 18 cases, 2 provider-timeout failures, pass rate 0.8889.
+- 120-case deterministic strict regression: 120 cases, 0 failures, pass rate 1.0000.
+- 120-case live retrieval strict regression: 120 cases, 0 failures, provider error rate 0.0000.
+- 120-case raw live LLM strict regression: 120 cases, 2 provider-timeout failures, pass rate 0.9833.
+
+M8.4c behavior contract:
+
+- Dependency-chain phrasing such as "prerequisite chain", "dependency chain", "required FRUs", and "before removing" routes directly to `get_fru_dependency_chain`.
+- Table-of-contents/index pages are skipped during safety warning extraction before broad battery/system-board marker matching.
+- `fru_dependency_chain` regression cases expect a graph evidence trajectory, not a full procedure/diagram/safety repair-plan trajectory.
 
 M9 gate:
 
 - The generated 120-case fixture remains useful as regression coverage.
 - The human gold fixture has priority for M9 readiness.
-- Full M9 packaging should wait until dependency-chain routing and safety warning false-positive remediation are completed and rerun.
+- Full M9 packaging may proceed after M8.4c, but raw LLM-only repair planning must not be the default demo path. M9 should present deterministic validation and evidence-grounded fallback as the user-facing behavior while reporting raw live LLM strict metrics separately.

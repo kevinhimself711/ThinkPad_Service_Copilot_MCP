@@ -4,16 +4,17 @@
       "human_fru_dependency_chain": 3,
       "human_fru_procedure": 6,
       "human_negative": 2,
-      "human_table": 4
+      "human_table": 4,
+      "human_warning": 3
     },
-    "accepted_count": 15,
+    "accepted_count": 18,
     "candidate_count": 18,
     "markdown_annotations_are_authoritative": true,
-    "rejected_count": 3,
+    "m8_4c_replacement_warning_cases": 3,
+    "rejected_count": 0,
     "status_counts": {
       "corrected": 2,
-      "rejected": 3,
-      "verified": 13
+      "verified": 16
     }
   },
   "source": "Human-reviewed M8.4 ThinkPad agent gold set generated from local M8.4a review annotations. Contains only copyright-light queries, identifiers, page numbers, and expected evidence constraints; no Lenovo manual prose is included.",
@@ -597,6 +598,135 @@
         ]
       },
       "query": "ThinkPad T490 error code 0177 repair evidence"
+    },
+    {
+      "case_id": "m8_4_thinkpad_t14_gen2_p14s_gen2_hmm_warning_battery_verified",
+      "category": "human_warning",
+      "expected": {
+        "citation_required": true,
+        "clarification_needed": false,
+        "forbidden_tools": [],
+        "identifiers": [
+          "battery"
+        ],
+        "llm_required": false,
+        "manual_ids": [
+          "thinkpad_t14_gen2_p14s_gen2_hmm"
+        ],
+        "max_unsupported_claims": 0,
+        "pages": [
+          81
+        ],
+        "record_types": [
+          "warning"
+        ],
+        "required_tools": [
+          "resolve_thinkpad_model",
+          "get_safety_warnings"
+        ],
+        "safety_required": true,
+        "status": "ok"
+      },
+      "human_review": {
+        "candidate_pages": [
+          81
+        ],
+        "review_status": "verified",
+        "reviewer_notes": "M8.4c replacement warning case verified against local PDF page 81.",
+        "source_case_id": "m8_4c_thinkpad_t14_gen2_p14s_gen2_hmm_warning_battery_verified",
+        "source_record_id": "thinkpad_t14_gen2_p14s_gen2_hmm_p081_danger_0066",
+        "source_record_kind": "warning",
+        "verified_pages": [
+          81
+        ]
+      },
+      "query": "ThinkPad T14 Gen 2 battery safety warning"
+    },
+    {
+      "case_id": "m8_4_thinkpad_t14_gen3_p14s_gen3_hmm_warning_battery_verified",
+      "category": "human_warning",
+      "expected": {
+        "citation_required": true,
+        "clarification_needed": false,
+        "forbidden_tools": [],
+        "identifiers": [
+          "battery"
+        ],
+        "llm_required": false,
+        "manual_ids": [
+          "thinkpad_t14_gen3_p14s_gen3_hmm"
+        ],
+        "max_unsupported_claims": 0,
+        "pages": [
+          70
+        ],
+        "record_types": [
+          "warning"
+        ],
+        "required_tools": [
+          "resolve_thinkpad_model",
+          "get_safety_warnings"
+        ],
+        "safety_required": true,
+        "status": "ok"
+      },
+      "human_review": {
+        "candidate_pages": [
+          70
+        ],
+        "review_status": "verified",
+        "reviewer_notes": "M8.4c replacement warning case verified against local PDF page 70.",
+        "source_case_id": "m8_4c_thinkpad_t14_gen3_p14s_gen3_hmm_warning_battery_verified",
+        "source_record_id": "thinkpad_t14_gen3_p14s_gen3_hmm_p070_danger_0058",
+        "source_record_kind": "warning",
+        "verified_pages": [
+          70
+        ]
+      },
+      "query": "ThinkPad T14 Gen 3 battery safety warning"
+    },
+    {
+      "case_id": "m8_4_thinkpad_t480_hmm_warning_battery_verified",
+      "category": "human_warning",
+      "expected": {
+        "citation_required": true,
+        "clarification_needed": false,
+        "forbidden_tools": [],
+        "identifiers": [
+          "battery"
+        ],
+        "llm_required": false,
+        "manual_ids": [
+          "thinkpad_t480_hmm"
+        ],
+        "max_unsupported_claims": 0,
+        "pages": [
+          70
+        ],
+        "record_types": [
+          "warning"
+        ],
+        "required_tools": [
+          "resolve_thinkpad_model",
+          "get_safety_warnings"
+        ],
+        "safety_required": true,
+        "status": "ok"
+      },
+      "human_review": {
+        "candidate_pages": [
+          70
+        ],
+        "review_status": "verified",
+        "reviewer_notes": "M8.4c replacement warning case verified against local PDF page 70.",
+        "source_case_id": "m8_4c_thinkpad_t480_hmm_warning_battery_verified",
+        "source_record_id": "thinkpad_t480_hmm_p070_danger_0063",
+        "source_record_kind": "warning",
+        "verified_pages": [
+          70
+        ]
+      },
+      "query": "ThinkPad T480 battery safety warning"
     },
     {
       "case_id": "m8_4_negative_ambiguous_x1_carbon_battery",
