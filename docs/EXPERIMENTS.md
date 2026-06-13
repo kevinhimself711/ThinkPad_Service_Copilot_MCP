@@ -1665,3 +1665,55 @@ Result:
 | `provider_error_rate` | 0.0000 |
 
 Decision: remaining stress failures are concentrated in generated FRU procedure applicability conflicts, especially X1 Carbon queries paired with Yoga-only pen procedure labels and WWAN availability mismatch. The stress set remains a pressure test, not gold truth.
+
+## M8.4a-001: Human Gold Review Pack Generation
+
+- Date: 2026-06-13
+- Hypothesis: before changing the M8.3 strict page metric again, the project needs a human-review pack that separates candidate generation from human gold confirmation.
+- Scope: generate local ignored review artifacts only; do not create a committed human gold fixture and do not run live providers.
+
+Command:
+
+```powershell
+.\.venv\Scripts\python scripts\thinkpad_prepare_human_gold_review.py `
+  --manifest data\manifests\manuals_manifest.yaml `
+  --extracted-dir data\extracted\m3 `
+  --output data\eval\m8_4_human_gold_review.json `
+  --markdown-output data\eval\m8_4_human_gold_review.md
+```
+
+Result:
+
+| Metric | Value |
+|---|---:|
+| Candidate count | 18 |
+| FRU procedure candidates | 6 |
+| Dependency-chain candidates | 3 |
+| Table candidates | 4 |
+| Warning/figure supporting candidates | 3 |
+| Negative candidates | 2 |
+| Manuals represented | 8 |
+
+Decision: M8.4a produces the review pack needed for human page verification. The generated candidates remain `review_status=pending` and must not be interpreted as human gold until manually verified.
+
+## M8.4a-002: Review Pack Unit Tests
+
+- Date: 2026-06-13
+- Hypothesis: the review-pack generator can be tested with synthetic manifests and JSONL without Lenovo PDFs or manual prose.
+
+Commands:
+
+```powershell
+.\.venv\Scripts\python -m pytest tests\thinkpad\test_human_gold_review.py -q --basetemp data\tmp\pytest_m8_4a_fast2
+
+.\.venv\Scripts\ruff check scripts\thinkpad_prepare_human_gold_review.py tests\thinkpad\test_human_gold_review.py
+```
+
+Result:
+
+| Command | Result |
+|---|---|
+| `pytest tests\thinkpad\test_human_gold_review.py -q` | Passed, 3 tests. |
+| `ruff check scripts\thinkpad_prepare_human_gold_review.py tests\thinkpad\test_human_gold_review.py` | Passed. |
+
+Decision: the generator output is copyright-light, marks candidates as pending, requires positive candidates to have pages and identifiers, and keeps negative candidates page-free.

@@ -1282,3 +1282,58 @@ M8.2 establishes honest metric boundaries before M9. M9 can proceed, but README/
 ### Handoff
 
 M8.3 reaches the threshold to proceed to M9 packaging and interview readiness if M9 keeps deterministic validation and recovered evidence fallback as the default repair-planning path. Raw LLM-only planning should remain a reported provider-quality mode, not the demo default.
+
+---
+
+## M8.4a: Human Gold Review Pack
+
+- Date: 2026-06-13
+- User goal: Prepare a human-reviewable candidate pack for M8.4 human gold evaluation before changing evaluator page scoring or committing a human gold fixture.
+- Scope included: local ignored review-pack generator, synthetic tests, review guide, experiment log, and implementation log.
+- Scope excluded: evaluator page-metric changes, committed `thinkpad_m8_4_human_gold_set.json`, live DashScope runs, LLM calls, new HMM downloads, committed `data/`, and committed `docs/INTERVIEW_NOTES.md`.
+
+### File-Level Changes
+
+| Change | Path | Implementation Fact |
+|---|---|---|
+| Added | `scripts/thinkpad_prepare_human_gold_review.py` | Added a deterministic, read-only candidate generator that reads local M3 JSONL artifacts and manifest metadata, then writes ignored JSON/Markdown review packs under `data/eval/`. |
+| Added | `tests/thinkpad/test_human_gold_review.py` | Added synthetic tests for pending review status, copyright-light output, positive candidate required fields, page-free negative candidates, missing extracted-dir errors, and Markdown rendering. |
+| Added | `docs/M8_4A_HUMAN_GOLD_REVIEW_GUIDE.md` | Added instructions for manually verifying candidate pages against local PDFs without copying Lenovo manual prose. |
+| Modified | `docs/EXPERIMENTS.md` | Added M8.4a review-pack generation and unit-test experiment records. |
+| Modified | `docs/IMPLEMENTATION_LOG.md` | Added this M8.4a implementation fact record. |
+| Modified locally, not committed | `docs/INTERVIEW_NOTES.md` | Added M8.4a interview notes about separating candidate generation from human gold confirmation. |
+
+### Scripts And Commands
+
+| Script/Command | Purpose | Result |
+|---|---|---|
+| `.\.venv\Scripts\python -m pytest tests\thinkpad\test_human_gold_review.py -q --basetemp data\tmp\pytest_m8_4a_fast2` | Focused tests for the review-pack generator. | Passed, 3 tests. |
+| `.\.venv\Scripts\ruff check scripts\thinkpad_prepare_human_gold_review.py tests\thinkpad\test_human_gold_review.py` | Focused lint for the new script and tests. | Passed. |
+| `.\.venv\Scripts\python scripts\thinkpad_prepare_human_gold_review.py --manifest data\manifests\manuals_manifest.yaml --extracted-dir data\extracted\m3 --output data\eval\m8_4_human_gold_review.json --markdown-output data\eval\m8_4_human_gold_review.md` | Generate the local ignored M8.4a review pack from real M3 artifacts. | Passed; wrote 18 candidates across 8 manuals. |
+
+### Generated Local Artifacts
+
+| Path | Status |
+|---|---|
+| `data/eval/m8_4_human_gold_review.json` | Ignored local review pack, not committed. |
+| `data/eval/m8_4_human_gold_review.md` | Ignored local human review guide, not committed. |
+
+### Candidate Distribution
+
+| Category | Count |
+|---|---:|
+| `fru_procedure` | 6 |
+| `fru_dependency_chain` | 3 |
+| `table` | 4 |
+| `supporting_evidence` | 3 |
+| `negative` | 2 |
+
+### Deviations And Risks
+
+- M8.4a deliberately does not create a committed human gold fixture. Every generated candidate remains `review_status=pending`.
+- The local review pack is derived from M3 extraction candidates, so it is not gold truth until the user manually verifies pages against local PDFs.
+- The review pack includes PDF paths and candidate page numbers but no long Lenovo manual text.
+
+### Handoff
+
+The user should review `data/eval/m8_4_human_gold_review.md` and update the ignored JSON review pack with `review_status`, `verified_pages`, and short `reviewer_notes`. M8.4b should consume only `verified` or `corrected` candidates to create the committed human gold fixture and then revise evaluator page scoring.
