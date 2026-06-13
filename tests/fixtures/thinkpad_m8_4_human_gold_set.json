@@ -1,0 +1,671 @@
+{
+  "review_summary": {
+    "accepted_category_counts": {
+      "human_fru_dependency_chain": 3,
+      "human_fru_procedure": 6,
+      "human_negative": 2,
+      "human_table": 4
+    },
+    "accepted_count": 15,
+    "candidate_count": 18,
+    "markdown_annotations_are_authoritative": true,
+    "rejected_count": 3,
+    "status_counts": {
+      "corrected": 2,
+      "rejected": 3,
+      "verified": 13
+    }
+  },
+  "source": "Human-reviewed M8.4 ThinkPad agent gold set generated from local M8.4a review annotations. Contains only copyright-light queries, identifiers, page numbers, and expected evidence constraints; no Lenovo manual prose is included.",
+  "test_cases": [
+    {
+      "case_id": "m8_4_thinkpad_t14_gen2_p14s_gen2_hmm_fru_1080",
+      "category": "human_fru_procedure",
+      "expected": {
+        "citation_required": true,
+        "clarification_needed": false,
+        "forbidden_tools": [],
+        "identifiers": [
+          "1080"
+        ],
+        "llm_required": true,
+        "manual_ids": [
+          "thinkpad_t14_gen2_p14s_gen2_hmm"
+        ],
+        "max_unsupported_claims": 0,
+        "pages": [
+          81
+        ],
+        "record_types": [
+          "fru_procedure"
+        ],
+        "required_tools": [
+          "resolve_thinkpad_model",
+          "get_fru_procedure"
+        ],
+        "safety_required": false,
+        "status": "ok"
+      },
+      "human_review": {
+        "candidate_pages": [
+          81,
+          82
+        ],
+        "review_status": "corrected",
+        "reviewer_notes": "",
+        "source_case_id": "m8_4a_thinkpad_t14_gen2_p14s_gen2_hmm_fru_1080",
+        "source_record_id": "thinkpad_t14_gen2_p14s_gen2_hmm_fru_1080",
+        "source_record_kind": "fru_procedure",
+        "verified_pages": [
+          81
+        ]
+      },
+      "query": "ThinkPad T14 Gen 2 Coin-cell battery removal plan"
+    },
+    {
+      "case_id": "m8_4_thinkpad_t14_gen3_p14s_gen3_hmm_fru_1030",
+      "category": "human_fru_procedure",
+      "expected": {
+        "citation_required": true,
+        "clarification_needed": false,
+        "forbidden_tools": [],
+        "identifiers": [
+          "1030"
+        ],
+        "llm_required": true,
+        "manual_ids": [
+          "thinkpad_t14_gen3_p14s_gen3_hmm"
+        ],
+        "max_unsupported_claims": 0,
+        "pages": [
+          70,
+          71
+        ],
+        "record_types": [
+          "fru_procedure"
+        ],
+        "required_tools": [
+          "resolve_thinkpad_model",
+          "get_fru_procedure"
+        ],
+        "safety_required": false,
+        "status": "ok"
+      },
+      "human_review": {
+        "candidate_pages": [
+          70,
+          71
+        ],
+        "review_status": "verified",
+        "reviewer_notes": "",
+        "source_case_id": "m8_4a_thinkpad_t14_gen3_p14s_gen3_hmm_fru_1030",
+        "source_record_id": "thinkpad_t14_gen3_p14s_gen3_hmm_fru_1030",
+        "source_record_kind": "fru_procedure",
+        "verified_pages": [
+          70,
+          71
+        ]
+      },
+      "query": "ThinkPad T14 Gen 3 Built-in battery removal plan"
+    },
+    {
+      "case_id": "m8_4_thinkpad_t480_hmm_fru_1010",
+      "category": "human_fru_procedure",
+      "expected": {
+        "citation_required": true,
+        "clarification_needed": false,
+        "forbidden_tools": [],
+        "identifiers": [
+          "1010"
+        ],
+        "llm_required": true,
+        "manual_ids": [
+          "thinkpad_t480_hmm"
+        ],
+        "max_unsupported_claims": 0,
+        "pages": [
+          70,
+          71
+        ],
+        "record_types": [
+          "fru_procedure"
+        ],
+        "required_tools": [
+          "resolve_thinkpad_model",
+          "get_fru_procedure"
+        ],
+        "safety_required": false,
+        "status": "ok"
+      },
+      "human_review": {
+        "candidate_pages": [
+          70
+        ],
+        "review_status": "corrected",
+        "reviewer_notes": "PDF page 70 has 1010 removable battery heading, notices, danger warning, and prerequisite note. PDF page 71 top diagram completes the removable battery removal steps before 1020 starts.",
+        "source_case_id": "m8_4a_thinkpad_t480_hmm_fru_1010",
+        "source_record_id": "thinkpad_t480_hmm_fru_1010",
+        "source_record_kind": "fru_procedure",
+        "verified_pages": [
+          70,
+          71
+        ]
+      },
+      "query": "ThinkPad T480 Removable battery removal plan"
+    },
+    {
+      "case_id": "m8_4_thinkpad_t490_hmm_fru_1070",
+      "category": "human_fru_procedure",
+      "expected": {
+        "citation_required": true,
+        "clarification_needed": false,
+        "forbidden_tools": [],
+        "identifiers": [
+          "1070"
+        ],
+        "llm_required": true,
+        "manual_ids": [
+          "thinkpad_t490_hmm"
+        ],
+        "max_unsupported_claims": 0,
+        "pages": [
+          79,
+          80
+        ],
+        "record_types": [
+          "fru_procedure"
+        ],
+        "required_tools": [
+          "resolve_thinkpad_model",
+          "get_fru_procedure"
+        ],
+        "safety_required": false,
+        "status": "ok"
+      },
+      "human_review": {
+        "candidate_pages": [
+          79,
+          80
+        ],
+        "review_status": "verified",
+        "reviewer_notes": "",
+        "source_case_id": "m8_4a_thinkpad_t490_hmm_fru_1070",
+        "source_record_id": "thinkpad_t490_hmm_fru_1070",
+        "source_record_kind": "fru_procedure",
+        "verified_pages": [
+          79,
+          80
+        ]
+      },
+      "query": "ThinkPad T490 Coin-cell battery removal plan"
+    },
+    {
+      "case_id": "m8_4_thinkpad_x1_carbon_gen9_x1_yoga_gen6_hmm_fru_1020",
+      "category": "human_fru_procedure",
+      "expected": {
+        "citation_required": true,
+        "clarification_needed": false,
+        "forbidden_tools": [],
+        "identifiers": [
+          "1020"
+        ],
+        "llm_required": true,
+        "manual_ids": [
+          "thinkpad_x1_carbon_gen9_x1_yoga_gen6_hmm"
+        ],
+        "max_unsupported_claims": 0,
+        "pages": [
+          74,
+          75
+        ],
+        "record_types": [
+          "fru_procedure"
+        ],
+        "required_tools": [
+          "resolve_thinkpad_model",
+          "get_fru_procedure"
+        ],
+        "safety_required": false,
+        "status": "ok"
+      },
+      "human_review": {
+        "candidate_pages": [
+          74,
+          75
+        ],
+        "review_status": "verified",
+        "reviewer_notes": "",
+        "source_case_id": "m8_4a_thinkpad_x1_carbon_gen9_x1_yoga_gen6_hmm_fru_1020",
+        "source_record_id": "thinkpad_x1_carbon_gen9_x1_yoga_gen6_hmm_fru_1020",
+        "source_record_kind": "fru_procedure",
+        "verified_pages": [
+          74,
+          75
+        ]
+      },
+      "query": "ThinkPad X1 Carbon Gen 9 Built-in battery removal plan"
+    },
+    {
+      "case_id": "m8_4_thinkpad_x1_carbon_gen10_x1_yoga_gen7_hmm_fru_1020",
+      "category": "human_fru_procedure",
+      "expected": {
+        "citation_required": true,
+        "clarification_needed": false,
+        "forbidden_tools": [],
+        "identifiers": [
+          "1020"
+        ],
+        "llm_required": true,
+        "manual_ids": [
+          "thinkpad_x1_carbon_gen10_x1_yoga_gen7_hmm"
+        ],
+        "max_unsupported_claims": 0,
+        "pages": [
+          72,
+          73
+        ],
+        "record_types": [
+          "fru_procedure"
+        ],
+        "required_tools": [
+          "resolve_thinkpad_model",
+          "get_fru_procedure"
+        ],
+        "safety_required": false,
+        "status": "ok"
+      },
+      "human_review": {
+        "candidate_pages": [
+          72,
+          73
+        ],
+        "review_status": "verified",
+        "reviewer_notes": "",
+        "source_case_id": "m8_4a_thinkpad_x1_carbon_gen10_x1_yoga_gen7_hmm_fru_1020",
+        "source_record_id": "thinkpad_x1_carbon_gen10_x1_yoga_gen7_hmm_fru_1020",
+        "source_record_kind": "fru_procedure",
+        "verified_pages": [
+          72,
+          73
+        ]
+      },
+      "query": "ThinkPad X1 Carbon Gen 10 Built-in battery removal plan"
+    },
+    {
+      "case_id": "m8_4_thinkpad_p1_gen4_x1_extreme_gen4_hmm_chain_1030",
+      "category": "human_fru_dependency_chain",
+      "expected": {
+        "citation_required": true,
+        "clarification_needed": false,
+        "forbidden_tools": [],
+        "identifiers": [
+          "1030"
+        ],
+        "llm_required": true,
+        "manual_ids": [
+          "thinkpad_p1_gen4_x1_extreme_gen4_hmm"
+        ],
+        "max_unsupported_claims": 0,
+        "pages": [
+          69
+        ],
+        "record_types": [
+          "fru_dependency_chain"
+        ],
+        "required_tools": [
+          "resolve_thinkpad_model",
+          "get_fru_dependency_chain"
+        ],
+        "safety_required": false,
+        "status": "ok"
+      },
+      "human_review": {
+        "candidate_pages": [
+          69
+        ],
+        "review_status": "verified",
+        "reviewer_notes": "",
+        "source_case_id": "m8_4a_thinkpad_p1_gen4_x1_extreme_gen4_hmm_chain_1030",
+        "source_record_id": "1030->1010",
+        "source_record_kind": "dependency_edge",
+        "verified_pages": [
+          69
+        ]
+      },
+      "query": "ThinkPad P1 Gen 4 Wireless WAN card (for selected models) prerequisite chain"
+    },
+    {
+      "case_id": "m8_4_thinkpad_e14_gen2_e15_gen2_hmm_chain_1020",
+      "category": "human_fru_dependency_chain",
+      "expected": {
+        "citation_required": true,
+        "clarification_needed": false,
+        "forbidden_tools": [],
+        "identifiers": [
+          "1020"
+        ],
+        "llm_required": true,
+        "manual_ids": [
+          "thinkpad_e14_gen2_e15_gen2_hmm"
+        ],
+        "max_unsupported_claims": 0,
+        "pages": [
+          67,
+          68
+        ],
+        "record_types": [
+          "fru_dependency_chain"
+        ],
+        "required_tools": [
+          "resolve_thinkpad_model",
+          "get_fru_dependency_chain"
+        ],
+        "safety_required": false,
+        "status": "ok"
+      },
+      "human_review": {
+        "candidate_pages": [
+          67,
+          68
+        ],
+        "review_status": "verified",
+        "reviewer_notes": "",
+        "source_case_id": "m8_4a_thinkpad_e14_gen2_e15_gen2_hmm_chain_1020",
+        "source_record_id": "1020->1010",
+        "source_record_kind": "dependency_edge",
+        "verified_pages": [
+          67,
+          68
+        ]
+      },
+      "query": "ThinkPad E14 Gen 2 Built-in battery prerequisite chain"
+    },
+    {
+      "case_id": "m8_4_thinkpad_x1_carbon_gen10_x1_yoga_gen7_hmm_chain_1020",
+      "category": "human_fru_dependency_chain",
+      "expected": {
+        "citation_required": true,
+        "clarification_needed": false,
+        "forbidden_tools": [],
+        "identifiers": [
+          "1020"
+        ],
+        "llm_required": true,
+        "manual_ids": [
+          "thinkpad_x1_carbon_gen10_x1_yoga_gen7_hmm"
+        ],
+        "max_unsupported_claims": 0,
+        "pages": [
+          72,
+          73
+        ],
+        "record_types": [
+          "fru_dependency_chain"
+        ],
+        "required_tools": [
+          "resolve_thinkpad_model",
+          "get_fru_dependency_chain"
+        ],
+        "safety_required": false,
+        "status": "ok"
+      },
+      "human_review": {
+        "candidate_pages": [
+          72,
+          73
+        ],
+        "review_status": "verified",
+        "reviewer_notes": "",
+        "source_case_id": "m8_4a_thinkpad_x1_carbon_gen10_x1_yoga_gen7_hmm_chain_1020",
+        "source_record_id": "1020->1010",
+        "source_record_kind": "dependency_edge",
+        "verified_pages": [
+          72,
+          73
+        ]
+      },
+      "query": "ThinkPad X1 Carbon Gen 10 Built-in battery prerequisite chain"
+    },
+    {
+      "case_id": "m8_4_thinkpad_t14_gen2_p14s_gen2_hmm_error_0177",
+      "category": "human_table",
+      "expected": {
+        "citation_required": true,
+        "clarification_needed": false,
+        "forbidden_tools": [],
+        "identifiers": [
+          "0177"
+        ],
+        "llm_required": false,
+        "manual_ids": [
+          "thinkpad_t14_gen2_p14s_gen2_hmm"
+        ],
+        "max_unsupported_claims": 0,
+        "pages": [
+          40
+        ],
+        "record_types": [
+          "table"
+        ],
+        "required_tools": [
+          "resolve_thinkpad_model",
+          "lookup_error_code"
+        ],
+        "safety_required": false,
+        "status": "ok"
+      },
+      "human_review": {
+        "candidate_pages": [
+          40
+        ],
+        "review_status": "verified",
+        "reviewer_notes": "",
+        "source_case_id": "m8_4a_thinkpad_t14_gen2_p14s_gen2_hmm_error_0177",
+        "source_record_id": "thinkpad_t14_gen2_p14s_gen2_hmm_p040_t00_r001",
+        "source_record_kind": "table:error_code",
+        "verified_pages": [
+          40
+        ]
+      },
+      "query": "ThinkPad T14 Gen 2 error code 0177 repair evidence"
+    },
+    {
+      "case_id": "m8_4_thinkpad_t14_gen3_p14s_gen3_hmm_error_0177",
+      "category": "human_table",
+      "expected": {
+        "citation_required": true,
+        "clarification_needed": false,
+        "forbidden_tools": [],
+        "identifiers": [
+          "0177"
+        ],
+        "llm_required": false,
+        "manual_ids": [
+          "thinkpad_t14_gen3_p14s_gen3_hmm"
+        ],
+        "max_unsupported_claims": 0,
+        "pages": [
+          38
+        ],
+        "record_types": [
+          "table"
+        ],
+        "required_tools": [
+          "resolve_thinkpad_model",
+          "lookup_error_code"
+        ],
+        "safety_required": false,
+        "status": "ok"
+      },
+      "human_review": {
+        "candidate_pages": [
+          38
+        ],
+        "review_status": "verified",
+        "reviewer_notes": "",
+        "source_case_id": "m8_4a_thinkpad_t14_gen3_p14s_gen3_hmm_error_0177",
+        "source_record_id": "thinkpad_t14_gen3_p14s_gen3_hmm_p038_t00_r001",
+        "source_record_kind": "table:error_code",
+        "verified_pages": [
+          38
+        ]
+      },
+      "query": "ThinkPad T14 Gen 3 error code 0177 repair evidence"
+    },
+    {
+      "case_id": "m8_4_thinkpad_t480_hmm_error_0177",
+      "category": "human_table",
+      "expected": {
+        "citation_required": true,
+        "clarification_needed": false,
+        "forbidden_tools": [],
+        "identifiers": [
+          "0177"
+        ],
+        "llm_required": false,
+        "manual_ids": [
+          "thinkpad_t480_hmm"
+        ],
+        "max_unsupported_claims": 0,
+        "pages": [
+          42
+        ],
+        "record_types": [
+          "table"
+        ],
+        "required_tools": [
+          "resolve_thinkpad_model",
+          "lookup_error_code"
+        ],
+        "safety_required": false,
+        "status": "ok"
+      },
+      "human_review": {
+        "candidate_pages": [
+          42
+        ],
+        "review_status": "verified",
+        "reviewer_notes": "",
+        "source_case_id": "m8_4a_thinkpad_t480_hmm_error_0177",
+        "source_record_id": "thinkpad_t480_hmm_p042_t00_r001",
+        "source_record_kind": "table:error_code",
+        "verified_pages": [
+          42
+        ]
+      },
+      "query": "ThinkPad T480 error code 0177 repair evidence"
+    },
+    {
+      "case_id": "m8_4_thinkpad_t490_hmm_error_0177",
+      "category": "human_table",
+      "expected": {
+        "citation_required": true,
+        "clarification_needed": false,
+        "forbidden_tools": [],
+        "identifiers": [
+          "0177"
+        ],
+        "llm_required": false,
+        "manual_ids": [
+          "thinkpad_t490_hmm"
+        ],
+        "max_unsupported_claims": 0,
+        "pages": [
+          43
+        ],
+        "record_types": [
+          "table"
+        ],
+        "required_tools": [
+          "resolve_thinkpad_model",
+          "lookup_error_code"
+        ],
+        "safety_required": false,
+        "status": "ok"
+      },
+      "human_review": {
+        "candidate_pages": [
+          43
+        ],
+        "review_status": "verified",
+        "reviewer_notes": "",
+        "source_case_id": "m8_4a_thinkpad_t490_hmm_error_0177",
+        "source_record_id": "thinkpad_t490_hmm_p043_t00_r001",
+        "source_record_kind": "table:error_code",
+        "verified_pages": [
+          43
+        ]
+      },
+      "query": "ThinkPad T490 error code 0177 repair evidence"
+    },
+    {
+      "case_id": "m8_4_negative_ambiguous_x1_carbon_battery",
+      "category": "human_negative",
+      "expected": {
+        "citation_required": false,
+        "clarification_needed": true,
+        "forbidden_tools": [
+          "get_fru_procedure"
+        ],
+        "identifiers": [
+          "generation_required"
+        ],
+        "llm_required": false,
+        "manual_ids": [],
+        "max_unsupported_claims": 0,
+        "pages": [],
+        "record_types": [],
+        "required_tools": [
+          "resolve_thinkpad_model"
+        ],
+        "safety_required": false,
+        "status": "clarification_required"
+      },
+      "human_review": {
+        "candidate_pages": [],
+        "review_status": "verified",
+        "reviewer_notes": "Negative case: X1 Carbon without generation is ambiguous; system should request model generation or machine type.",
+        "source_case_id": "m8_4a_negative_ambiguous_x1_carbon_battery",
+        "source_record_id": null,
+        "source_record_kind": "negative:model_ambiguity",
+        "verified_pages": []
+      },
+      "query": "X1 Carbon battery removal plan"
+    },
+    {
+      "case_id": "m8_4_negative_unsupported_t14_gen5_battery",
+      "category": "human_negative",
+      "expected": {
+        "citation_required": false,
+        "clarification_needed": false,
+        "forbidden_tools": [
+          "get_fru_procedure"
+        ],
+        "identifiers": [
+          "unsupported_model"
+        ],
+        "llm_required": false,
+        "manual_ids": [],
+        "max_unsupported_claims": 0,
+        "pages": [],
+        "record_types": [],
+        "required_tools": [
+          "resolve_thinkpad_model"
+        ],
+        "safety_required": false,
+        "status": "not_found"
+      },
+      "human_review": {
+        "candidate_pages": [],
+        "review_status": "verified",
+        "reviewer_notes": "Negative case: T14 Gen 5 is explicit but not covered by the current 8-manual manifest; system should return not_found/unsupported.",
+        "source_case_id": "m8_4a_negative_unsupported_t14_gen5_battery",
+        "source_record_id": null,
+        "source_record_kind": "negative:unsupported_generation",
+        "verified_pages": []
+      },
+      "query": "ThinkPad T14 Gen 5 battery removal plan"
+    }
+  ],
+  "version": "m8_4_human_gold"
+}

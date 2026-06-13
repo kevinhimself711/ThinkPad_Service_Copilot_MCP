@@ -5,8 +5,10 @@ from pathlib import Path
 
 import pytest
 
+from src.thinkpad.agent import EvidenceBundle, RepairPlanResult, RepairPlanStep
 from src.thinkpad.agent_evaluation import (
     ThinkPadAgentGoldenCase,
+    _per_step_page_coverage,
     evaluate_thinkpad_agent_cases,
     load_thinkpad_agent_golden_set,
 )
@@ -231,6 +233,31 @@ def test_agent_evaluator_strict_citation_fails_missing_required_page() -> None:
     assert "required citation manual/page/record coverage missing" in result.failure_reasons
 
 
+def test_per_step_page_coverage_scores_only_fru_procedure_steps() -> None:
+    result = RepairPlanResult(
+        status="ok",
+        clarification_needed=False,
+        query="battery removal",
+        message="ok",
+        request={},
+        evidence_bundle=EvidenceBundle(),
+        repair_plan=[
+            _plan_step("step_01", "fru_procedure", 70),
+            _plan_step("step_02", "fru_procedure", 72),
+            _plan_step("step_03", "warning", 5),
+            _plan_step("step_04", "figure", 99),
+        ],
+        citations=[
+            {"manual_id": "manual_a", "page_start": 70},
+            {"manual_id": "manual_a", "page_start": 72},
+            {"manual_id": "manual_a", "page_start": 5},
+            {"manual_id": "manual_a", "page_start": 99},
+        ],
+    )
+
+    assert _per_step_page_coverage(result, {70, 71}) == 0.5
+
+
 def test_agent_evaluator_raw_live_llm_success_metric() -> None:
     service = _service_with_records()
     service._retriever = _empty_retriever  # noqa: SLF001 - test injection
@@ -298,6 +325,16 @@ def _case(
             "llm_required": llm_required,
         },
     }
+
+
+def _plan_step(step_id: str, evidence_type: str, page: int) -> RepairPlanStep:
+    return RepairPlanStep(
+        step_id=step_id,
+        title=step_id,
+        action="Synthetic action",
+        evidence_type=evidence_type,
+        citations=[{"manual_id": "manual_a", "page_start": page}],
+    )
 
 
 def _failing_retriever(*args, **kwargs):

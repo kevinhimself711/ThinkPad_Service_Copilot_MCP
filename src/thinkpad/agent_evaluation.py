@@ -511,12 +511,40 @@ def _required_evidence_coverage(
             for citation in result.citations
         ) else 0.0)
     if expected_pages:
-        checks.append(1.0 if any(_citation_matches_page(citation, expected_pages) for citation in result.citations) else 0.0)
+        checks.append(_per_step_page_coverage(result, expected_pages))
     if expected_record_types:
         checks.append(_required_record_type_coverage(result, expected_record_types))
     if not checks:
         return 1.0 if _has_minimum_citation(result.citations) else 0.0
     return sum(checks) / len(checks)
+
+
+def _per_step_page_coverage(result: RepairPlanResult, expected_pages: set[int]) -> float:
+    """Measure human-verified page coverage for cited FRU procedure steps.
+
+    Result-level citation accuracy answers "did any returned evidence cite an
+    expected page". Human-reviewed FRU procedures need a stricter signal: when
+    the agent emits multiple procedure steps, each procedure step should cite a
+    page/range that overlaps the human-verified procedure pages. Non-procedure
+    steps are ignored here because diagram, warning, and dependency evidence may
+    legitimately cite different pages.
+    """
+
+    if not expected_pages:
+        return 1.0
+    procedure_steps = [
+        step for step in result.repair_plan
+        if str(step.evidence_type or "").lower() == "fru_procedure"
+    ]
+    cited_procedure_steps = [step for step in procedure_steps if _has_minimum_citation(step.citations)]
+    if not cited_procedure_steps:
+        return 1.0
+    hits = sum(
+        1
+        for step in cited_procedure_steps
+        if any(_citation_matches_page(citation, expected_pages) for citation in step.citations)
+    )
+    return hits / len(cited_procedure_steps)
 
 
 def _actual_evidence_types(result: RepairPlanResult) -> set[str]:

@@ -677,3 +677,54 @@ M8.3 improves the system to a usable benchmark level, but the interpretation rem
 ### M8.3 Decision
 
 M8.3 reaches the quality threshold to proceed to M9 packaging and interview readiness, with one boundary: do not expose raw LLM-only repair planning as the default path. Any later `plan_repair` MCP exposure should use deterministic validation and recovered evidence fallback.
+
+## M8.4b Human Gold Evaluation
+
+- Date: 2026-06-13
+- Milestone: M8.4b Human Gold Finalization
+- Canonical report: `docs/M8_4_HUMAN_GOLD_REPORT.md`
+- New fixture: `tests/fixtures/thinkpad_m8_4_human_gold_set.json`
+- Raw local reports: ignored under `data/eval/`
+- Scope: finalize human-reviewed cases from M8.4a, revise strict FRU procedure page coverage, and run deterministic baselines
+
+### Human Gold Outcome
+
+M8.4b used the manually reviewed Markdown pack as the authoritative annotation source because the generated review JSON still had all candidates marked `pending`.
+
+| Status | Count |
+|---|---:|
+| `verified` | 13 |
+| `corrected` | 2 |
+| `rejected` | 3 |
+
+Committed human gold fixture:
+
+| Category | Cases |
+|---|---:|
+| `human_fru_procedure` | 6 |
+| `human_fru_dependency_chain` | 3 |
+| `human_table` | 4 |
+| `human_negative` | 2 |
+| Total | 15 |
+
+The three rejected cases were page-3 battery-warning false positives caused by table-of-contents pages being matched as safety warning evidence. They are not included in the gold fixture.
+
+### Deterministic Strict Results
+
+| Run | Cases | Failed | Pass Rate | Strict Citation Accuracy | Key Finding |
+|---|---:|---:|---:|---:|---|
+| M8.4 human gold deterministic strict | 15 | 3 | 0.8000 | 0.7692 | dependency-chain phrasing does not route to graph tool |
+| M8.4 120-case deterministic strict regression | 120 | 0 | 1.0000 | 1.0000 | existing contract suite remains clean |
+
+The three human-gold failures are all `human_fru_dependency_chain` cases. The agent resolves the model but does not treat "prerequisite chain" as a graph/dependency intent, so it stops after `resolve_thinkpad_model` and returns `not_found`.
+
+### M8.4b Decision
+
+M8.4b changes the gate for M9. The 120-case fixture is still useful as a regression suite, but the human gold set is the higher-value signal because it contains manually verified pages and caught a phrasing gap missed by generated cases.
+
+Do not proceed directly to full M9 packaging. Next recommended step is M8.4c:
+
+- fix dependency-chain query routing,
+- tighten safety warning extraction to avoid TOC false positives,
+- regenerate/review replacement warning candidates,
+- rerun M8.4 human gold deterministic strict and live retrieval when `DASHSCOPE_API_KEY` is available.

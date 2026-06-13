@@ -718,3 +718,42 @@ Known M8.3 result:
 - Stress live retrieval strict 194-case pass rate: 0.9691.
 
 M8.3 does not prove universal repair-answer accuracy. It establishes that the current benchmark contract is usable enough for M9 packaging and interview readiness if raw LLM-only planning is not the default demo path.
+
+## 21. M8.4 Human Gold Evaluation Contract
+
+M8.4 introduces human page verification as a gate above generated benchmark fixtures.
+
+Artifacts:
+
+- Review pack generator: `scripts/thinkpad_prepare_human_gold_review.py`
+- Finalizer: `scripts/thinkpad_finalize_human_gold.py`
+- Human review guide: `docs/M8_4A_HUMAN_GOLD_REVIEW_GUIDE.md`
+- Human gold report: `docs/M8_4_HUMAN_GOLD_REPORT.md`
+- Committed fixture: `tests/fixtures/thinkpad_m8_4_human_gold_set.json`
+
+M8.4a and M8.4b responsibilities:
+
+- M8.4a generates local ignored review artifacts under `data/eval/`.
+- A human reviewer verifies pages against local PDFs and records only short statuses/pages/notes.
+- M8.4b treats the reviewed Markdown as authoritative, accepts only `verified` and `corrected` cases, skips `rejected` cases, and commits a copyright-light fixture.
+- Positive accepted cases must have `verified_pages`; negative cases may remain page-free.
+- Rejected cases are not hidden. Their root causes must be documented as extraction or candidate-generation issues.
+
+Strict page metric update:
+
+- Result-level `citation_accuracy` remains a broad manual/page hit signal.
+- `required_evidence_coverage` now uses per-step page coverage for `fru_procedure` repair steps when expected pages are present.
+- Warning, figure, and dependency-chain steps can legitimately cite different pages and are not penalized by the FRU procedure page coverage helper.
+
+Known M8.4b result:
+
+- Human gold deterministic strict: 15 cases, 3 failures, pass rate 0.8000.
+- The 3 failures are all dependency-chain phrasing failures: the agent does not route "prerequisite chain" queries to `get_fru_dependency_chain`.
+- 120-case deterministic strict regression remains clean at pass rate 1.0000.
+- Three warning candidates were rejected as page-3 table-of-contents false positives from broad safety marker extraction.
+
+M9 gate:
+
+- The generated 120-case fixture remains useful as regression coverage.
+- The human gold fixture has priority for M9 readiness.
+- Full M9 packaging should wait until dependency-chain routing and safety warning false-positive remediation are completed and rerun.

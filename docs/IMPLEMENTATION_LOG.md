@@ -1337,3 +1337,67 @@ M8.3 reaches the threshold to proceed to M9 packaging and interview readiness if
 ### Handoff
 
 The user should review `data/eval/m8_4_human_gold_review.md` and update the ignored JSON review pack with `review_status`, `verified_pages`, and short `reviewer_notes`. M8.4b should consume only `verified` or `corrected` candidates to create the committed human gold fixture and then revise evaluator page scoring.
+
+---
+
+## M8.4b: Human Gold Finalization + Page Metric Integrity
+
+- Date: 2026-06-13
+- User goal: Execute the planned M8.4b by finalizing the manually reviewed M8.4a annotations into a committed human gold fixture, revising strict page coverage, running deterministic evaluations, and recording the real result.
+- Scope included: Markdown-driven finalizer, committed human gold fixture, evaluator page metric change, finalizer/evaluator tests, deterministic M8.4 evaluations, docs, and regression checks.
+- Scope excluded: live DashScope runs because `DASHSCOPE_API_KEY` was not present in the shell, new HMM downloads, committed `data/`, committed provider output, committed `docs/INTERVIEW_NOTES.md`, and remediation of the newly discovered routing/safety extraction issues.
+
+### File-Level Changes
+
+| Change | Path | Implementation Fact |
+|---|---|---|
+| Added | `scripts/thinkpad_finalize_human_gold.py` | Added a finalizer that parses human annotations from the local M8.4a Markdown review pack, merges them with original JSON candidate metadata, rejects pending annotations, skips rejected cases, requires verified pages for accepted positive cases, writes the committed fixture, and writes an ignored audit JSON. |
+| Added | `tests/fixtures/thinkpad_m8_4_human_gold_set.json` | Added the first committed human-reviewed agent fixture: 15 accepted cases, 3 rejected warning false positives excluded. |
+| Modified | `src/thinkpad/agent_evaluation.py` | Changed `required_evidence_coverage` so expected pages use `_per_step_page_coverage()` for `fru_procedure` repair steps instead of only checking any result-level citation hit. |
+| Modified | `tests/thinkpad/test_agent_evaluation.py` | Added regression coverage for per-step FRU procedure page coverage while ignoring valid warning/figure supporting steps. |
+| Added | `tests/thinkpad/test_human_gold_finalizer.py` | Added synthetic tests for Markdown annotations overriding JSON pending state, corrected pages, rejected-case skipping, positive-case page enforcement, pending annotation failure, and copyright-light output. |
+| Modified | `scripts/thinkpad_generate_agent_eval_candidates.py` | Moved Windows stdio wrapping from import time into `main()` to stop pytest capture from failing when tests import helper functions. |
+| Added | `docs/M8_4_HUMAN_GOLD_REPORT.md` | Added the canonical M8.4b report with human-review outcome, metric semantics, deterministic results, failure root causes, and M8.4c recommendation. |
+| Modified | `docs/DEV_SPEC_THINKPAD.md` | Documented the M8.4 human gold contract, strict page metric semantics, known M8.4b results, and M9 gate impact. |
+| Modified | `docs/EVAL_REPORT.md` | Added M8.4b human gold metrics and decision. |
+| Modified | `docs/EXPERIMENTS.md` | Added M8.4b finalization, human gold evaluation, 120-case regression, tests, lint, and live-provider note. |
+| Modified | `docs/IMPLEMENTATION_LOG.md` | Added this M8.4b implementation fact record. |
+| Modified locally, not committed | `docs/INTERVIEW_NOTES.md` | Added M8.4b interview notes about human gold, metric inflation, routing gaps, and safety false positives. |
+
+### Scripts And Commands
+
+| Script/Command | Purpose | Result |
+|---|---|---|
+| `.\.venv\Scripts\python scripts\thinkpad_finalize_human_gold.py --review-json data\eval\m8_4_human_gold_review.json --review-markdown data\eval\m8_4_human_gold_review.md --output tests\fixtures\thinkpad_m8_4_human_gold_set.json --audit-output data\eval\m8_4_human_gold_finalize_audit.json` | Finalize manually reviewed M8.4a annotations into committed human gold fixture. | Passed; 15 accepted, 3 rejected, 2 corrected, 13 verified. |
+| `.\.venv\Scripts\python scripts\thinkpad_agent_evaluate.py --golden-set tests\fixtures\thinkpad_m8_4_human_gold_set.json --manifest data\manifests\manuals_manifest.yaml --extracted-dir data\extracted\m3 --collection thinkpad_m4 --mode deterministic --strict-citation --output data\eval\m8_4_human_det_strict.json` | Evaluate the new human gold fixture. | Completed; 15 cases, 3 failures, pass rate 0.8000. |
+| `.\.venv\Scripts\python scripts\thinkpad_agent_evaluate.py --golden-set tests\fixtures\thinkpad_m8_2_reality_golden_set.json --manifest data\manifests\manuals_manifest.yaml --extracted-dir data\extracted\m3 --collection thinkpad_m4 --mode deterministic --strict-citation --output data\eval\m8_4_120_det_strict.json` | Ensure old 120-case strict regression remains clean after evaluator change. | Completed; 120 cases, 0 failures, pass rate 1.0000. |
+| `.\.venv\Scripts\python -m pytest tests\thinkpad -q --basetemp data\tmp\pytest_m8_4b_all_thinkpad_2` | Full ThinkPad regression. | Passed, 107 tests. |
+| `.\.venv\Scripts\python -m pytest tests\unit\test_smoke_imports.py -q` | Upstream/domain smoke import regression. | Passed, 22 tests. |
+| `.\.venv\Scripts\python -m pytest tests\e2e\test_dashboard_smoke.py -q` | Dashboard smoke regression. | Passed, 8 tests. |
+| `.\.venv\Scripts\ruff check src\thinkpad scripts\thinkpad_*.py tests\thinkpad` | Lint changed ThinkPad modules, scripts, and tests. | Passed. |
+
+### Evaluation Results
+
+| Run | Cases | Failed | Pass Rate | Interpretation |
+|---|---:|---:|---:|---|
+| M8.4 human gold deterministic strict | 15 | 3 | 0.8000 | Human gold exposed dependency-chain routing gap. |
+| M8.4 120-case deterministic strict | 120 | 0 | 1.0000 | Existing generated contract fixture remains clean. |
+
+Human gold failures:
+
+- `m8_4_thinkpad_p1_gen4_x1_extreme_gen4_hmm_chain_1030`
+- `m8_4_thinkpad_e14_gen2_e15_gen2_hmm_chain_1020`
+- `m8_4_thinkpad_x1_carbon_gen10_x1_yoga_gen7_hmm_chain_1020`
+
+Root cause: the agent does not currently recognize "prerequisite chain" as a dependency-graph intent, so it does not call `get_fru_dependency_chain`.
+
+### Deviations And Risks
+
+- The manually reviewed Markdown was used as the source of truth because the generated JSON review pack remained pending. This is intentional and documented by the finalizer audit.
+- The rejected warning cases are not replaced in M8.4b. They identify a real safety extractor false-positive issue: broad `battery` matching on table-of-contents pages.
+- Live DashScope was not run because `DASHSCOPE_API_KEY` was not present in the shell. No key was written into commands or docs.
+- The old 120-case suite returning 1.0000 should not override the human gold result. It remains regression coverage, not proof of readiness for M9.
+
+### Handoff
+
+Do not proceed directly to full M9 packaging. The next recommended milestone is M8.4c: fix dependency-chain routing, tighten safety warning extraction, generate/review replacement warning candidates, and rerun the M8.4 human gold gate.

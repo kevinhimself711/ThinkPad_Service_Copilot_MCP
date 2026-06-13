@@ -13,12 +13,6 @@ _SCRIPT_DIR = Path(__file__).resolve().parent
 _REPO_ROOT = _SCRIPT_DIR.parent
 sys.path.insert(0, str(_REPO_ROOT))
 
-if sys.platform == "win32":
-    import io
-
-    sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8", errors="replace")
-    sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding="utf-8", errors="replace")
-
 from src.thinkpad.manifest import load_manifest  # noqa: E402
 
 _DIAGNOSTIC_PROCEDURE_TERMS = (
@@ -42,6 +36,7 @@ def parse_args() -> argparse.Namespace:
 
 
 def main() -> int:
+    _configure_windows_stdio()
     args = parse_args()
     extracted = Path(args.extracted_dir)
     manuals = load_manifest(args.manifest)
@@ -69,6 +64,15 @@ def main() -> int:
     output_path.write_text(json.dumps(output, ensure_ascii=False, indent=2, sort_keys=True) + "\n", encoding="utf-8")
     print(json.dumps({"output": str(output_path), "case_count": len(cases)}, indent=2))
     return 0
+
+
+def _configure_windows_stdio() -> None:
+    if sys.platform != "win32":
+        return
+    import io
+
+    sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8", errors="replace")
+    sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding="utf-8", errors="replace")
 
 
 def _read_jsonl(path: Path) -> list[dict[str, Any]]:

@@ -1717,3 +1717,124 @@ Result:
 | `ruff check scripts\thinkpad_prepare_human_gold_review.py tests\thinkpad\test_human_gold_review.py` | Passed. |
 
 Decision: the generator output is copyright-light, marks candidates as pending, requires positive candidates to have pages and identifiers, and keeps negative candidates page-free.
+
+## M8.4b-001: Human Gold Finalization
+
+- Date: 2026-06-13
+- Hypothesis: manually reviewed M8.4a annotations can be converted into a committed copyright-light human gold fixture without committing local review artifacts or Lenovo manual prose.
+
+Command:
+
+```powershell
+.\.venv\Scripts\python scripts\thinkpad_finalize_human_gold.py `
+  --review-json data\eval\m8_4_human_gold_review.json `
+  --review-markdown data\eval\m8_4_human_gold_review.md `
+  --output tests\fixtures\thinkpad_m8_4_human_gold_set.json `
+  --audit-output data\eval\m8_4_human_gold_finalize_audit.json
+```
+
+Result:
+
+| Metric | Value |
+|---|---:|
+| Candidate count | 18 |
+| Accepted cases | 15 |
+| Rejected cases | 3 |
+| Verified | 13 |
+| Corrected | 2 |
+
+Decision: committed fixture contains 15 accepted cases. The 3 rejected warning candidates remain evidence of a safety extractor false-positive issue and are not converted into gold.
+
+## M8.4b-002: Human Gold Deterministic Strict Evaluation
+
+- Date: 2026-06-13
+- Hypothesis: human-reviewed pages will expose whether the current agent benchmark is overfitting generated cases.
+
+Command:
+
+```powershell
+.\.venv\Scripts\python scripts\thinkpad_agent_evaluate.py `
+  --golden-set tests\fixtures\thinkpad_m8_4_human_gold_set.json `
+  --manifest data\manifests\manuals_manifest.yaml `
+  --extracted-dir data\extracted\m3 `
+  --collection thinkpad_m4 `
+  --mode deterministic `
+  --strict-citation `
+  --output data\eval\m8_4_human_det_strict.json
+```
+
+Result:
+
+| Metric | Value |
+|---|---:|
+| Cases | 15 |
+| Failed cases | 3 |
+| `passed_case_rate` | 0.8000 |
+| `final_plan_status_accuracy` | 0.8000 |
+| `trajectory_tool_sequence_accuracy` | 0.8000 |
+| `strict_citation_accuracy` | 0.7692 |
+
+Failed cases:
+
+- `m8_4_thinkpad_p1_gen4_x1_extreme_gen4_hmm_chain_1030`
+- `m8_4_thinkpad_e14_gen2_e15_gen2_hmm_chain_1020`
+- `m8_4_thinkpad_x1_carbon_gen10_x1_yoga_gen7_hmm_chain_1020`
+
+Decision: the human gold set found a real routing gap. The agent does not currently treat "prerequisite chain" phrasing as a dependency-graph request.
+
+## M8.4b-003: 120-Case Deterministic Regression
+
+- Date: 2026-06-13
+- Hypothesis: revising FRU procedure page coverage should not regress the existing 120-case M8.2/M8.3 contract fixture.
+
+Command:
+
+```powershell
+.\.venv\Scripts\python scripts\thinkpad_agent_evaluate.py `
+  --golden-set tests\fixtures\thinkpad_m8_2_reality_golden_set.json `
+  --manifest data\manifests\manuals_manifest.yaml `
+  --extracted-dir data\extracted\m3 `
+  --collection thinkpad_m4 `
+  --mode deterministic `
+  --strict-citation `
+  --output data\eval\m8_4_120_det_strict.json
+```
+
+Result:
+
+| Metric | Value |
+|---|---:|
+| Cases | 120 |
+| Failed cases | 0 |
+| `passed_case_rate` | 1.0000 |
+| `strict_citation_accuracy` | 1.0000 |
+
+Decision: the previous contract fixture remains clean. It should be kept as regression coverage, but the human gold fixture now has priority for the M9 gate because it caught a natural-language graph-query gap.
+
+## M8.4b-004: Tests And Lint
+
+- Date: 2026-06-13
+- Hypothesis: finalizer, evaluator, and Windows pytest capture changes do not regress the ThinkPad codebase.
+
+Commands:
+
+```powershell
+.\.venv\Scripts\python -m pytest tests\thinkpad -q --basetemp data\tmp\pytest_m8_4b_all_thinkpad_2
+
+.\.venv\Scripts\python -m pytest tests\unit\test_smoke_imports.py -q
+
+.\.venv\Scripts\python -m pytest tests\e2e\test_dashboard_smoke.py -q
+
+.\.venv\Scripts\ruff check src\thinkpad scripts\thinkpad_*.py tests\thinkpad
+```
+
+Result:
+
+| Command | Result |
+|---|---|
+| `pytest tests\thinkpad -q` | Passed, 107 tests. |
+| `pytest tests\unit\test_smoke_imports.py -q` | Passed, 22 tests. |
+| `pytest tests\e2e\test_dashboard_smoke.py -q` | Passed, 8 tests. |
+| `ruff check ...` | Passed. |
+
+Live provider note: `DASHSCOPE_API_KEY` was not present in the current shell, so M8.4b did not run live DashScope. No key was written into commands, docs, or local files.
