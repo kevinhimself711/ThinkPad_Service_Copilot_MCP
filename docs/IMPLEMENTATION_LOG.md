@@ -1220,3 +1220,65 @@ M8.1 closes the M8 live LLM golden-set blocker. M9 can proceed to packaging and 
 ### Handoff
 
 M8.2 establishes honest metric boundaries before M9. M9 can proceed, but README/demo/interview material must distinguish contract pass rate, raw live LLM quality, recovered user-visible behavior, and strict citation quality.
+
+---
+
+## M8.3: Systematic Diagnosis + Usability-Level Optimization
+
+- Date: 2026-06-13
+- User goal: Improve the M8.2 strict/raw findings into a usable, explainable benchmark baseline before deciding whether to enter M9.
+- Scope included: evaluator semantic repair, agent repair-step granularity, component alias remediation, unsupported-generation classification, screw-size normalization, strict/live/stress evaluation reruns, and documentation.
+- Scope excluded: new MCP `plan_repair` tool, new HMM downloads, committed local `data/`, committed provider outputs, committed `docs/INTERVIEW_NOTES.md`, and raw LLM-only demo exposure.
+
+### File-Level Changes
+
+| Change | Path | Implementation Fact |
+|---|---|---|
+| Modified | `src/thinkpad/agent_evaluation.py` | Reworked strict citation scoring into `per_step_citation_validity`, `required_record_type_coverage`, and `required_evidence_coverage`; made `strict-live-llm` disable LLM repair/fallback for raw provider scoring. |
+| Modified | `src/thinkpad/agent.py` | Expanded component aliases, mapped no-power symptoms to battery evidence, returned unsupported generation as `not_found`, generated finer procedure-backed repair steps, filtered extraction noise from procedure actions, and passed compact cited plan structure into the LLM composer. |
+| Modified | `src/thinkpad/model_resolver.py` | Added unsupported-generation detection and prevented negated generation text from being treated as a positive model-generation match. |
+| Modified | `src/thinkpad/tool_service.py` | Improved lookup normalization for screw multiply signs, decimal screw sizes, hyphen/spacing variants, and storage/SSD terms. |
+| Modified | `tests/thinkpad/test_agent.py` | Added tests for procedure action planning, unsupported generation, and component alias behavior. |
+| Modified | `tests/thinkpad/test_agent_evaluation.py` | Updated strict citation tests so valid extra cited evidence is allowed while missing required manual/page coverage still fails; verified strict live LLM does not repair. |
+| Modified | `tests/thinkpad/test_model_resolver.py` | Added unsupported generation and negated-generation regression coverage. |
+| Modified | `tests/thinkpad/test_tool_service.py` | Added screw normalization regression coverage for decimal screw-size rows. |
+| Added | `docs/M8_3_OPTIMIZATION_REPORT.md` | Added canonical M8.3 before/after optimization report. |
+| Modified | `docs/DEV_SPEC_THINKPAD.md` | Documented the M8.3 evaluator and agent behavior contract. |
+| Modified | `docs/EVAL_REPORT.md` | Added M8.3 metrics, interpretation, and M9 gate recommendation. |
+| Modified | `docs/EXPERIMENTS.md` | Added M8.3 test, deterministic, live retrieval, raw live LLM, and stress experiment records. |
+| Modified | `docs/IMPLEMENTATION_LOG.md` | Added this M8.3 implementation fact record. |
+| Modified locally, not committed | `docs/INTERVIEW_NOTES.md` | Added M8.3 interview notes on strict metrics, alias remediation, and raw-vs-recovered LLM quality. |
+
+### Scripts And Commands
+
+| Script/Command | Purpose | Result |
+|---|---|---|
+| `.\.venv\Scripts\python -m pytest tests\thinkpad -q` with `TEMP/TMP=data\tmp\sys_temp` | Full ThinkPad regression after M8.3 changes. | Passed, 100 tests. |
+| `.\.venv\Scripts\python -m pytest tests\unit\test_smoke_imports.py -q` with `TEMP/TMP=data\tmp\sys_temp` | Upstream smoke import regression. | Passed, 22 tests. |
+| `.\.venv\Scripts\python -m pytest tests\e2e\test_dashboard_smoke.py -q` with `TEMP/TMP=data\tmp\sys_temp` | Dashboard smoke regression. | Passed, 8 tests. |
+| `.\.venv\Scripts\ruff check src\thinkpad src\mcp_server\tools\thinkpad_tools.py tests\thinkpad scripts\thinkpad_*.py` | Lint changed ThinkPad/MCP/script surfaces. | Passed. |
+| `.\.venv\Scripts\python scripts\thinkpad_agent_evaluate.py --golden-set tests\fixtures\thinkpad_m8_2_reality_golden_set.json --manifest data\manifests\manuals_manifest.yaml --extracted-dir data\extracted\m3 --collection thinkpad_m4 --mode deterministic --strict-citation --output data\eval\m8_3_report_deterministic_strict.json` | M8.3 deterministic strict benchmark. | Completed; 120 cases, 0 failures, pass rate 1.0000. |
+| `.\.venv\Scripts\python scripts\thinkpad_agent_evaluate.py --golden-set tests\fixtures\thinkpad_m8_2_reality_golden_set.json --manifest data\manifests\manuals_manifest.yaml --extracted-dir data\extracted\m3 --collection thinkpad_m4 --require-live-retrieval --strict-citation --output data\eval\m8_3_report_live_retrieval_strict.json` | M8.3 live retrieval strict benchmark. | Completed; 120 cases, 0 failures, provider error rate 0.0000. |
+| `.\.venv\Scripts\python scripts\thinkpad_agent_evaluate.py --golden-set tests\fixtures\thinkpad_m8_2_reality_golden_set.json --manifest data\manifests\manuals_manifest.yaml --extracted-dir data\extracted\m3 --collection thinkpad_m4 --live-llm --strict-live-llm --strict-citation --output data\eval\m8_3_report_raw_live_llm_strict.json` | M8.3 raw live LLM strict benchmark. | Completed; 120 cases, 3 failures, pass rate 0.9750, raw LLM success 0.9375. |
+| `.\.venv\Scripts\python scripts\thinkpad_agent_evaluate.py --golden-set data\eval\m8_1_agent_stress_candidates.json --manifest data\manifests\manuals_manifest.yaml --extracted-dir data\extracted\m3 --collection thinkpad_m4 --require-live-retrieval --strict-citation --output data\eval\m8_3_stress_live_retrieval_strict.json` | M8.3 stress live retrieval strict benchmark. | Completed; 194 cases, 6 failures, pass rate 0.9691. |
+| `git diff --check` | Whitespace validation. | Passed with line-ending warnings only. |
+
+### Evaluation Results
+
+| Run | Cases | Failed | Pass Rate | Key Metric |
+|---|---:|---:|---:|---|
+| deterministic strict | 120 | 0 | 1.0000 | `per_step_citation_validity=1.0000` |
+| live retrieval strict | 120 | 0 | 1.0000 | `provider_error_rate=0.0000` |
+| raw live LLM strict | 120 | 3 | 0.9750 | `raw_llm_success_rate=0.9375` |
+| stress live retrieval strict | 194 | 6 | 0.9691 | remaining failures are stress applicability conflicts |
+
+### Deviations And Risks
+
+- The M8.3 recovered live LLM path was not rerun after documentation because `DASHSCOPE_API_KEY` was not present in the current shell. The full raw strict live LLM run was completed and is the stronger new generation-quality signal for this milestone.
+- Raw live LLM strict still had 3/120 provider timeout/error failures and p95 latency around 52 seconds.
+- The deterministic and live retrieval strict 1.0000 results are benchmark-contract results. They must not be presented as universal open-world repair accuracy.
+- Remaining stress failures are generated-candidate applicability conflicts, not broad citation plumbing or retrieval failures.
+
+### Handoff
+
+M8.3 reaches the threshold to proceed to M9 packaging and interview readiness if M9 keeps deterministic validation and recovered evidence fallback as the default repair-planning path. Raw LLM-only planning should remain a reported provider-quality mode, not the demo default.

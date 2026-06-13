@@ -150,27 +150,29 @@ def test_agent_evaluator_strict_live_llm_preserves_raw_failure() -> None:
         )
     ]
 
+    llm = FakeLLM("not json")
     report = evaluate_thinkpad_agent_cases(
         cases,
         service,
         mode="live_llm",
-        llm=FakeLLM("not json"),
+        llm=llm,
         strict_live_llm=True,
     )
 
     result = report.case_results[0]
     assert result.passed is False
+    assert llm.calls == 1
     assert result.metrics["raw_llm_success_rate"] == 0.0
     assert result.metrics["fallback_recovered_rate"] == 0.0
     assert "strict live LLM raw output failed" in result.failure_reasons
 
 
-def test_agent_evaluator_strict_citation_checks_all_steps() -> None:
+def test_agent_evaluator_strict_citation_allows_extra_cited_evidence_steps() -> None:
     service = _service_with_records()
     cases = [
         ThinkPadAgentGoldenCase.from_dict(
             _case(
-                "strict_citation_failure",
+                "strict_citation_extra_evidence",
                 "21CB battery removal plan",
                 required_tools=[
                     "resolve_thinkpad_model",
@@ -189,10 +191,44 @@ def test_agent_evaluator_strict_citation_checks_all_steps() -> None:
     report = evaluate_thinkpad_agent_cases(cases, service, strict_citation=True)
 
     result = report.case_results[0]
-    assert result.passed is False
+    assert result.passed is True
     assert result.metrics["all_step_citation_coverage"] == 1.0
+    assert result.metrics["per_step_citation_validity"] == 1.0
+    assert result.metrics["required_record_type_coverage"] == 1.0
+    assert result.metrics["strict_citation_accuracy"] == 1.0
+
+
+def test_agent_evaluator_strict_citation_fails_missing_required_page() -> None:
+    service = _service_with_records()
+    cases = [
+        ThinkPadAgentGoldenCase.from_dict(
+            _case(
+                "strict_citation_page_failure",
+                "21CB battery removal plan",
+                required_tools=[
+                    "resolve_thinkpad_model",
+                    "get_fru_procedure",
+                    "get_fru_dependency_chain",
+                    "get_related_diagram",
+                    "get_safety_warnings",
+                ],
+                record_types=["fru_procedure"],
+                pages=[999],
+                identifiers=["1020"],
+                safety_required=False,
+            )
+        )
+    ]
+
+    report = evaluate_thinkpad_agent_cases(cases, service, strict_citation=True)
+
+    result = report.case_results[0]
+    assert result.passed is False
+    assert result.metrics["per_step_citation_validity"] == 1.0
+    assert result.metrics["required_record_type_coverage"] == 1.0
+    assert result.metrics["required_evidence_coverage"] < 1.0
     assert result.metrics["strict_citation_accuracy"] == 0.0
-    assert "strict citation manual/page/record mismatch" in result.failure_reasons
+    assert "required citation manual/page/record coverage missing" in result.failure_reasons
 
 
 def test_agent_evaluator_raw_live_llm_success_metric() -> None:
@@ -241,6 +277,7 @@ def _case(
     safety_required: bool = False,
     forbidden_tools: list[str] | None = None,
     llm_required: bool = False,
+    pages: list[int] | None = None,
 ):
     return {
         "case_id": case_id,
@@ -252,6 +289,7 @@ def _case(
             "required_tools": required_tools or ["resolve_thinkpad_model"],
             "forbidden_tools": forbidden_tools or [],
             "manual_ids": ["thinkpad_x1_carbon_gen10_x1_yoga_gen7_hmm"],
+            "pages": pages or [],
             "record_types": record_types or [],
             "identifiers": identifiers or [],
             "citation_required": True,

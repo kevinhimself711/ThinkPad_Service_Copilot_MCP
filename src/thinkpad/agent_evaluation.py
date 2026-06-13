@@ -189,7 +189,7 @@ def evaluate_thinkpad_agent_cases(
         "strict_citation": strict_citation,
     }
     return ThinkPadAgentEvalReport(
-        version="m8_2" if strict_live_llm or strict_citation else "m8",
+        version="m8_3" if strict_live_llm or strict_citation else "m8",
         mode=mode,
         query_count=len(cases),
         aggregate_metrics=aggregate,
@@ -211,6 +211,7 @@ def _evaluate_one_case(
     strict_citation: bool,
 ) -> ThinkPadAgentEvalResult:
     use_case_llm = bool(mode == "live_llm" and case.expected.get("llm_required", False))
+    effective_repair_attempts = 0 if strict_live_llm and use_case_llm else llm_repair_attempts
     t0 = time.monotonic()
     try:
         result = plan_thinkpad_repair(
@@ -222,7 +223,7 @@ def _evaluate_one_case(
             top_k=top_k,
             use_retrieval=mode in {"live_retrieval", "live_llm"},
             require_live_retrieval=mode in {"live_retrieval", "live_llm"},
-            llm_repair_attempts=llm_repair_attempts,
+            llm_repair_attempts=effective_repair_attempts,
         )
     except Exception as exc:
         result = _error_result(case.query, str(exc), mode)
@@ -295,20 +296,37 @@ def _score_agent_response(
             expected_pages=_int_set(expected.get("pages")),
         )
         metrics["all_step_citation_coverage"] = _all_step_citation_coverage(result.repair_plan)
-        metrics["strict_citation_accuracy"] = _strict_citation_accuracy(
+        expected_manual_ids = _string_set(expected.get("manual_ids"))
+        expected_pages = _int_set(expected.get("pages"))
+        expected_record_types = _string_set(expected.get("record_types"))
+        metrics["per_step_citation_validity"] = _per_step_citation_validity(
             result=result,
-            expected_manual_ids=_string_set(expected.get("manual_ids")),
-            expected_pages=_int_set(expected.get("pages")),
-            expected_record_types=_string_set(expected.get("record_types")),
+            expected_manual_ids=expected_manual_ids,
         )
+        metrics["required_record_type_coverage"] = _required_record_type_coverage(
+            result=result,
+            expected_record_types=expected_record_types,
+        )
+        metrics["required_evidence_coverage"] = _required_evidence_coverage(
+            result=result,
+            expected_manual_ids=expected_manual_ids,
+            expected_pages=expected_pages,
+            expected_record_types=expected_record_types,
+        )
+        metrics["strict_citation_accuracy"] = 1.0 if (
+            metrics["per_step_citation_validity"] == 1.0
+            and metrics["required_evidence_coverage"] == 1.0
+        ) else 0.0
         if metrics["citation_coverage"] == 0.0:
             failure_reasons.append("minimum citation missing")
         if metrics["citation_accuracy"] == 0.0:
             failure_reasons.append("citation manual/page mismatch")
-        if strict_citation and metrics["all_step_citation_coverage"] < 1.0:
+        if strict_citation and metrics["per_step_citation_validity"] < 1.0:
             failure_reasons.append("not all repair steps have citations")
-        if strict_citation and metrics["strict_citation_accuracy"] < 1.0:
-            failure_reasons.append("strict citation manual/page/record mismatch")
+        if strict_citation and metrics["required_record_type_coverage"] < 1.0:
+            failure_reasons.append("required record type coverage missing")
+        if strict_citation and metrics["required_evidence_coverage"] < 1.0:
+            failure_reasons.append("required citation manual/page/record coverage missing")
 
     expected_record_types = _string_set(expected.get("record_types"))
     if expected_record_types:
@@ -453,17 +471,13 @@ def _all_step_citation_coverage(repair_plan: list[Any]) -> float:
     return cited / len(repair_plan)
 
 
-def _strict_citation_accuracy(
+def _per_step_citation_validity(
     result: RepairPlanResult,
     expected_manual_ids: set[str],
-    expected_pages: set[int],
-    expected_record_types: set[str],
 ) -> float:
     if not result.repair_plan:
         return 0.0
     for step in result.repair_plan:
-        if expected_record_types and step.evidence_type.lower() not in expected_record_types:
-            return 0.0
         if not _has_minimum_citation(step.citations):
             return 0.0
         if expected_manual_ids and not any(
@@ -471,9 +485,58 @@ def _strict_citation_accuracy(
             for citation in step.citations
         ):
             return 0.0
-        if expected_pages and not any(_citation_matches_page(citation, expected_pages) for citation in step.citations):
-            return 0.0
     return 1.0
+
+
+def _required_record_type_coverage(
+    result: RepairPlanResult,
+    expected_record_types: set[str],
+) -> float:
+    if not expected_record_types:
+        return 1.0
+    actual = _actual_evidence_types(result)
+    return sum(1 for item in expected_record_types if item in actual) / len(expected_record_types)
+
+
+def _required_evidence_coverage(
+    result: RepairPlanResult,
+    expected_manual_ids: set[str],
+    expected_pages: set[int],
+    expected_record_types: set[str],
+) -> float:
+    checks: list[float] = []
+    if expected_manual_ids:
+        checks.append(1.0 if any(
+            str(citation.get("manual_id", "")).lower() in expected_manual_ids
+            for citation in result.citations
+        ) else 0.0)
+    if expected_pages:
+        checks.append(1.0 if any(_citation_matches_page(citation, expected_pages) for citation in result.citations) else 0.0)
+    if expected_record_types:
+        checks.append(_required_record_type_coverage(result, expected_record_types))
+    if not checks:
+        return 1.0 if _has_minimum_citation(result.citations) else 0.0
+    return sum(checks) / len(checks)
+
+
+def _actual_evidence_types(result: RepairPlanResult) -> set[str]:
+    values: set[str] = set()
+    for step in result.repair_plan:
+        evidence_type = str(step.evidence_type or "").lower()
+        if evidence_type:
+            values.add(evidence_type)
+        if evidence_type in {"error_code", "screw_spec"}:
+            values.add("table")
+        if evidence_type == "warning":
+            values.add("warning")
+        if evidence_type == "figure":
+            values.add("figure")
+        if evidence_type == "fru_dependency_chain":
+            values.add("fru_dependency_chain")
+        if evidence_type == "fru_procedure":
+            values.add("fru_procedure")
+    values.update(_record_types(result.to_dict()))
+    return values
 
 
 def _citation_matches_page(citation: dict[str, Any], expected_pages: set[int]) -> bool:

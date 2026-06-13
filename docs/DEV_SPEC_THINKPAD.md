@@ -689,3 +689,32 @@ Known M8.2 result:
 - Live retrieval strict 120-case pass rate: 0.3917.
 - Raw live LLM strict 120-case pass rate: 0.3167, with `raw_llm_success_rate=0.0417`.
 - These values are intentionally lower than M8.1. They are used to prevent inflated claims, not to replace the recovered M8.1 demo path.
+
+## 20. M8.3 Agent Usability Remediation Contract
+
+M8.3 keeps the M8.1 agent fallback behavior and M8.2 strict/raw evaluation modes. It changes the implementation and evaluator semantics so strict results measure useful coverage instead of over-penalizing valid extra evidence.
+
+Evaluator semantics:
+
+- `per_step_citation_validity`: every generated repair step has at least one citation with required minimum fields.
+- `required_record_type_coverage`: required expected record types appear somewhere in the result evidence.
+- `required_evidence_coverage`: expected manual/page/record constraints are covered by result citations.
+- `strict_citation_accuracy`: strict pass only when per-step citation validity and required evidence coverage are both satisfied.
+- `strict-live-llm` disables LLM repair/fallback for raw provider quality measurement.
+
+Agent behavior:
+
+- Structured repair plans should use filtered FRU procedure actions where available, not only generic "use procedure" summary steps.
+- Each repair action must carry a procedure/table/warning/diagram citation as appropriate.
+- Component alias resolution covers common HMM/user variants for internal battery, lower/base cover, memory/RAM, SIM tray, SSD/storage, WWAN/WLAN/Wi-Fi, USB board, and power-button/fingerprint labels.
+- Explicit unsupported generations return `not_found` with an unsupported-generation reason. Ambiguous generations still require clarification.
+- Screw exact lookup normalizes multiply signs, decimal sizes, and spacing variants before matching.
+
+Known M8.3 result:
+
+- Deterministic strict 120-case pass rate: 1.0000.
+- Live retrieval strict 120-case pass rate: 1.0000.
+- Raw live LLM strict 120-case pass rate: 0.9750, with `raw_llm_success_rate=0.9375` and `provider_error_rate=0.0250`.
+- Stress live retrieval strict 194-case pass rate: 0.9691.
+
+M8.3 does not prove universal repair-answer accuracy. It establishes that the current benchmark contract is usable enough for M9 packaging and interview readiness if raw LLM-only planning is not the default demo path.

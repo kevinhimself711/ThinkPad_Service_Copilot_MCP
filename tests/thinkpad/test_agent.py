@@ -51,6 +51,7 @@ def test_agent_machine_type_plan_calls_expected_tools_and_cites() -> None:
     ]
     assert all("get_screw_spec" != trace.tool for trace in result.tool_trace)
     assert result.repair_plan
+    assert any(step.action == "Remove the built-in battery." for step in result.repair_plan)
     assert result.citations
     assert result.validation["minimum_citations_present"] is True
 
@@ -80,6 +81,30 @@ def test_agent_unsupported_model_does_not_call_llm() -> None:
     assert result.status == "not_found"
     assert result.generated_answer is None
     assert [trace.tool for trace in result.tool_trace] == ["resolve_thinkpad_model"]
+
+
+def test_agent_unsupported_generation_is_not_ambiguous_clarification() -> None:
+    service = ThinkPadToolService(manuals=[_manual_gen9(), _manual_gen10()])
+
+    result = plan_thinkpad_repair("X1 Carbon Gen 11 battery removal plan", service)
+
+    assert result.status == "not_found"
+    assert result.clarification_needed is False
+    assert result.refusal is not None
+    assert result.refusal.reason == "unsupported_generation"
+    assert [trace.tool for trace in result.tool_trace] == ["resolve_thinkpad_model"]
+
+
+def test_agent_component_aliases_resolve_to_hmm_fru_names() -> None:
+    service = _service_with_records()
+
+    internal_battery = plan_thinkpad_repair("21CB internal battery removal plan", service)
+    lower_cover = plan_thinkpad_repair("21CB lower cover removal plan", service)
+
+    assert internal_battery.status == "ok"
+    assert any(step.action == "Remove the built-in battery." for step in internal_battery.repair_plan)
+    assert lower_cover.status == "ok"
+    assert any(step.action == "Remove the base cover assembly." for step in lower_cover.repair_plan)
 
 
 def test_agent_fake_llm_unsupported_identifier_is_marked() -> None:

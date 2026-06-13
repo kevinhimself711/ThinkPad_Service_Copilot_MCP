@@ -634,3 +634,46 @@ Interpretation:
 ### M8.2 Decision
 
 M8.2 should be presented as evidence of evaluation integrity. It does not block M9 packaging, but M9 demo and README claims must distinguish recovered user-visible success from raw LLM/provider quality.
+
+## M8.3 Systematic Diagnosis And Usability Optimization
+
+- Date: 2026-06-13
+- Milestone: M8.3 Systematic Diagnosis + Usability-Level Optimization
+- Canonical report: `docs/M8_3_OPTIMIZATION_REPORT.md`
+- Raw local reports: ignored under `data/eval/`
+- Scope: strict evaluator semantics, component aliases, unsupported-generation classification, procedure-step planning, screw normalization, and strict/live benchmark reruns
+
+### Before And After
+
+| Run | Cases | Failed | Pass Rate | Notes |
+|---|---:|---:|---:|---|
+| M8.2 deterministic strict | 120 | 74 | 0.3833 | anti-inflation baseline |
+| M8.3 deterministic strict | 120 | 0 | 1.0000 | strict contract now satisfied |
+| M8.2 live retrieval strict | 120 | 73 | 0.3917 | anti-inflation baseline |
+| M8.3 live retrieval strict | 120 | 0 | 1.0000 | provider error rate 0.0000 |
+| M8.2 raw live LLM strict | 120 | 82 | 0.3167 | raw LLM baseline |
+| M8.3 raw live LLM strict | 120 | 3 | 0.9750 | 3 provider timeout/error failures |
+| M8.2 stress live retrieval strict | 194 | 178 | 0.0825 | pressure-test baseline |
+| M8.3 stress live retrieval strict | 194 | 6 | 0.9691 | remaining failures are stress applicability conflicts |
+
+M8.3 raw live LLM strict metrics:
+
+- `raw_llm_success_rate=0.9375`
+- `llm_citation_preservation=0.9375`
+- `unsupported_claim_rate=0.0000`
+- `strict_citation_accuracy=1.0000`
+- `provider_error_rate=0.0250`
+- `latency_ms_p95=52187 ms`
+
+### Interpretation
+
+M8.3 improves the system to a usable benchmark level, but the interpretation remains bounded:
+
+- Deterministic and live retrieval `1.0000` are strict benchmark contract results, not open-world repair accuracy.
+- Raw live LLM is now strong enough for controlled demos, but provider timeout/error remains visible and should not be hidden.
+- The recovered live LLM path was not rerun in this M8.3 session because `DASHSCOPE_API_KEY` was not present in the shell at documentation time. The stricter raw live LLM full run was completed and is the stronger new generation-quality evidence.
+- Stress failures are now concentrated in generated candidate applicability conflicts, not broad alias or citation plumbing failure.
+
+### M8.3 Decision
+
+M8.3 reaches the quality threshold to proceed to M9 packaging and interview readiness, with one boundary: do not expose raw LLM-only repair planning as the default path. Any later `plan_repair` MCP exposure should use deterministic validation and recovered evidence fallback.

@@ -153,21 +153,24 @@ _FRU_ID_RE = re.compile(r"(?<![A-Za-z0-9])([0-9]{4})(?![A-Za-z0-9])")
 
 _COMPONENT_PATTERNS: tuple[tuple[str, str], ...] = (
     (r"\bsystem board\b", "system board"),
-    (r"\bnano[- ]sim\b|\bsim card\b", "Nano-SIM"),
+    (r"\bnano[- ]sim(?: card)?(?: tray)?\b|\bsim[- ]card tray\b|\bsim tray\b|\bsim card\b", "Nano-SIM"),
     (r"\bbuilt[- ]in battery\b", "built-in battery"),
+    (r"\binternal battery\b", "built-in battery"),
     (r"\bremovable battery\b", "removable battery"),
     (r"\bcoin[- ]cell battery\b", "coin-cell battery"),
     (r"\bbattery\b", "battery"),
     (r"\bthermal fan\b|\bfan assembly\b|\bfan\b", "thermal fan assembly"),
-    (r"\bbase cover\b", "base cover assembly"),
+    (r"\bbase cover\b|\bbottom cover\b|\blower cover\b|\bbottom case\b|\blower case\b", "base cover assembly"),
     (r"\bkeyboard\b", "keyboard"),
     (r"\bspeaker\b", "speaker assembly"),
-    (r"\bmemory\b", "memory module"),
-    (r"\bm\.?2\s+ssd\b|\bssd\b", "SSD"),
-    (r"\bsolid[- ]state drive\b|\bstorage drive\b", "solid-state drive"),
-    (r"\bwwan\b|\bwireless[- ]wan\b", "wireless WAN card"),
-    (r"\bwlan\b|\bwireless[- ]lan\b", "wireless LAN card"),
+    (r"\bram\b|\bmemory\b|\bmemory module\b|\bdimm\b", "memory module"),
+    (r"\bm\.?2\s+ssd\b|\bssd\b|\bnvme\b", "SSD"),
+    (r"\bsolid[- ]state drive\b|\bstorage drive\b|\bstorage device\b", "solid-state drive"),
+    (r"\bwwan\b|\bwireless[- ]wan\b|\bwireless wan card\b", "wireless WAN card"),
+    (r"\bwlan\b|\bwireless[- ]lan\b|\bwi[- ]?fi card\b|\bwireless lan card\b", "wireless LAN card"),
+    (r"\busb board\b|\busb[- ]?c board\b|\busb board cable\b|\busb board bracket\b", "USB board"),
     (r"\bdisplay\b|\blcd\b", "display assembly"),
+    (r"\bpower button\b|\bfingerprint reader\b|\bfingerprint\b", "power button/fingerprint reader assembly"),
     (r"\baudio board\b", "audio board"),
     (r"\bio card\b|\bi/o card\b", "I/O card"),
     (r"\bio bracket\b|\bi/o bracket\b", "I/O bracket"),
@@ -224,8 +227,9 @@ def plan_thinkpad_repair(
     evidence = _replace_evidence(evidence, model_resolution=resolve_response.get("model_resolution") or {})
 
     unsupported = _is_unsupported_resolution(resolve_response)
+    unsupported_reason = _unsupported_resolution_reason(resolve_response)
     if unsupported:
-        if _is_broad_thinkpad_query(query):
+        if unsupported_reason == "unsupported_model" and _is_broad_thinkpad_query(query):
             refusal = AgentRefusal(
                 reason="model_clarification_required",
                 message="Model generation or machine type is required before returning a unique repair plan.",
@@ -243,10 +247,11 @@ def plan_thinkpad_repair(
                 generated_answer=None,
                 validation={"provider_error": False, "unsupported_claims": []},
             )
-        refusal = AgentRefusal(
-            reason="unsupported_model",
-            message=resolve_response.get("message") or "The model is not supported by the local HMM manifest.",
-        )
+        refusal_reason = "unsupported_generation" if unsupported_reason == "unsupported_generation" else "unsupported_model"
+        message = resolve_response.get("message") or "The model is not supported by the local HMM manifest."
+        if unsupported_reason == "unsupported_generation":
+            message = "The requested ThinkPad generation is explicit but not covered by the local HMM manifest."
+        refusal = AgentRefusal(reason=refusal_reason, message=message)
         return _final_result(
             status="not_found",
             clarification_needed=False,
@@ -258,7 +263,12 @@ def plan_thinkpad_repair(
             repair_plan=[],
             refusal=refusal,
             generated_answer=None,
-            validation={"provider_error": False, "unsupported_claims": []},
+            validation={
+                "provider_error": False,
+                "unsupported_claims": [],
+                "unsupported_model_class": "unsupported_model",
+                "unsupported_reason": refusal_reason,
+            },
         )
 
     if resolve_response.get("clarification_needed"):
@@ -521,6 +531,8 @@ def _detect_intent(query: str) -> _Intent:
 
 
 def _detect_component(normalized_query: str) -> str | None:
+    if re.search(r"\b(?:will not|does not|cannot|can't|can t|wont|won't|won t)\s+power on\b|\bno power\b", normalized_query):
+        return "battery"
     for pattern, component in _COMPONENT_PATTERNS:
         if re.search(pattern, normalized_query):
             return component
@@ -528,8 +540,15 @@ def _detect_component(normalized_query: str) -> str | None:
 
 
 def _is_unsupported_resolution(response: dict[str, Any]) -> bool:
+    return _unsupported_resolution_reason(response) is not None
+
+
+def _unsupported_resolution_reason(response: dict[str, Any]) -> str | None:
     resolution = response.get("model_resolution") if isinstance(response.get("model_resolution"), dict) else {}
-    return response.get("status") == "clarification_required" and resolution.get("reason") == "unsupported_model"
+    reason = str(resolution.get("reason") or "")
+    if response.get("status") == "clarification_required" and reason in {"unsupported_model", "unsupported_generation"}:
+        return reason
+    return None
 
 
 def _is_broad_thinkpad_query(query: str) -> bool:
@@ -592,15 +611,41 @@ def _build_structured_plan(evidence: EvidenceBundle) -> list[RepairPlanStep]:
         )
     if evidence.procedure:
         item = evidence.procedure[0]
-        steps.append(
-            _step(
-                len(steps) + 1,
-                f"Use FRU procedure {item.get('fru_id') or ''}".strip(),
-                f"Target FRU: {item.get('fru_name') or 'unknown component'}; follow the cited FRU procedure candidate.",
-                "fru_procedure",
-                [item.get("citation") or {}],
+        citation = item.get("citation") or {}
+        prerequisites = _clean_text_list(item.get("prerequisites"))
+        if prerequisites:
+            steps.append(
+                _step(
+                    len(steps) + 1,
+                    "Confirm prerequisite removals",
+                    "Confirm prerequisite FRU candidates before the target procedure: "
+                    + "; ".join(prerequisites[:8]),
+                    "fru_procedure",
+                    [citation],
+                )
             )
-        )
+        procedure_steps = _procedure_plan_actions(item.get("steps"))
+        if procedure_steps:
+            for procedure_index, action in enumerate(procedure_steps[:6], start=1):
+                steps.append(
+                    _step(
+                        len(steps) + 1,
+                        f"Follow FRU {item.get('fru_id') or ''} step {procedure_index}".strip(),
+                        action[:900],
+                        "fru_procedure",
+                        [citation],
+                    )
+                )
+        else:
+            steps.append(
+                _step(
+                    len(steps) + 1,
+                    f"Use FRU procedure {item.get('fru_id') or ''}".strip(),
+                    f"Target FRU: {item.get('fru_name') or 'unknown component'}; follow the cited FRU procedure candidate.",
+                    "fru_procedure",
+                    [citation],
+                )
+            )
     if evidence.dependency_chain:
         item = evidence.dependency_chain[0]
         chain = item.get("dependency_chain") or []
@@ -651,6 +696,75 @@ def _build_structured_plan(evidence: EvidenceBundle) -> list[RepairPlanStep]:
     return steps
 
 
+def _clean_text_list(value: Any) -> list[str]:
+    if not isinstance(value, list):
+        return []
+    cleaned: list[str] = []
+    for item in value:
+        text = re.sub(r"\s+", " ", str(item or "")).strip()
+        if text:
+            cleaned.append(text)
+    return cleaned
+
+
+def _procedure_plan_actions(value: Any) -> list[str]:
+    actions: list[str] = []
+    for text in _clean_text_list(value):
+        if _is_procedure_noise(text):
+            continue
+        if _is_action_like_procedure_text(text):
+            actions.append(text)
+    if actions:
+        return actions
+    return [text for text in _clean_text_list(value) if not _is_procedure_noise(text)]
+
+
+def _is_procedure_noise(text: str) -> bool:
+    normalized = text.strip().lower()
+    if not normalized:
+        return True
+    if normalized in {"step", "screw (quantity)", "color", "torque", "notes:", "when installing:"}:
+        return True
+    if re.fullmatch(r"[0-9]+", normalized):
+        return True
+    if re.fullmatch(r"\[\[page [0-9]+\]\]", normalized):
+        return True
+    if "hardware maintenance manual" in normalized:
+        return True
+    if normalized.startswith("chapter ") or re.fullmatch(r"table [0-9]+\.?.*", normalized):
+        return True
+    if normalized in {"black", "silver"}:
+        return True
+    return False
+
+
+def _is_action_like_procedure_text(text: str) -> bool:
+    normalized = text.lower()
+    action_terms = (
+        "remove",
+        "disconnect",
+        "detach",
+        "lift",
+        "loosen",
+        "install",
+        "attach",
+        "connect",
+        "ensure",
+        "reset",
+        "route",
+        "turn off",
+        "unplug",
+        "disable",
+    )
+    if any(term in normalized for term in action_terms):
+        return True
+    if re.search(r"\bm\s*[0-9]+(?:\.[0-9]+)?\s*(?:x|×|¡Á)\s*l?[0-9]+", text, re.IGNORECASE):
+        return True
+    if re.search(r"\b[0-9]+(?:\.[0-9]+)?\s*(?:nm|kgf-cm)\b", normalized):
+        return True
+    return False
+
+
 def _step(
     index: int,
     title: str,
@@ -685,7 +799,7 @@ def _compose_with_llm(
     repair_attempts: int,
 ) -> dict[str, Any]:
     labels = [_citation_label(citation) for citation in citations]
-    required_labels = labels[:5]
+    required_labels = _required_step_labels(repair_plan) or labels[:5]
     allowed_labels = set(labels)
     previous_content: str | None = None
     previous_failure: str | None = None
@@ -706,6 +820,7 @@ def _compose_with_llm(
                 query=query,
                 repair_plan=repair_plan,
                 labels=labels,
+                required_labels=required_labels,
                 llm=llm,
                 repair_mode=repair_mode,
                 previous_content=previous_content,
@@ -780,6 +895,7 @@ def _call_llm_composer(
     query: str,
     repair_plan: list[RepairPlanStep],
     labels: list[str],
+    required_labels: list[str],
     llm: BaseLLM,
     repair_mode: bool,
     previous_content: str | None,
@@ -804,12 +920,15 @@ def _call_llm_composer(
             "Return only one JSON object matching response_contract.",
             "Use only the provided structured_plan and citation_labels.",
             "Every step must have at least one citation label from citation_labels.",
+            "Preserve every required_citation_label in either a step citation or the top-level citations array.",
+            "Keep the same repair intent and do not merge away required structured_plan steps unless they are duplicate evidence reminders.",
             "Do not add FRU IDs, screw specs, torque values, error codes, warnings, or steps not present in the evidence.",
             "If evidence is incomplete, record it in limitations instead of guessing.",
         ],
         "citation_labels": labels,
+        "required_citation_labels": required_labels,
         "response_contract": response_contract,
-        "structured_plan": [step.to_dict() for step in repair_plan],
+        "structured_plan": _llm_structured_plan(repair_plan),
         "previous_content": previous_content if repair_mode else None,
         "previous_failure": previous_failure if repair_mode else None,
     }
@@ -819,9 +938,34 @@ def _call_llm_composer(
             Message(role="user", content=json.dumps(prompt, ensure_ascii=False, indent=2)),
         ],
         temperature=0.0,
-        max_tokens=500,
+        max_tokens=900,
     )
     return response.content.strip()
+
+
+def _llm_structured_plan(repair_plan: list[RepairPlanStep]) -> list[dict[str, Any]]:
+    return [
+        {
+            "step_id": step.step_id,
+            "title": step.title,
+            "action": step.action,
+            "evidence_type": step.evidence_type,
+            "citations": [_citation_label(citation) for citation in step.citations],
+        }
+        for step in repair_plan
+    ]
+
+
+def _required_step_labels(repair_plan: list[RepairPlanStep]) -> list[str]:
+    labels: list[str] = []
+    seen: set[str] = set()
+    for step in repair_plan:
+        for citation in step.citations:
+            label = _citation_label(citation)
+            if label not in seen:
+                seen.add(label)
+                labels.append(label)
+    return labels
 
 
 def _deterministic_llm_repair_answer(
@@ -942,7 +1086,8 @@ def _validate_plan(
     llm_citation_preserved = None
     missing_generated_citations: list[str] = []
     if generated_answer is not None:
-        missing_generated_citations = [label for label in citation_labels[:5] if label not in generated_answer]
+        required_labels = _required_step_labels(repair_plan) or citation_labels[:5]
+        missing_generated_citations = [label for label in required_labels if label not in generated_answer]
         llm_citation_preserved = bool(citation_labels) and not missing_generated_citations
         if not llm_citation_preserved:
             unsupported_claims.append("llm_missing_required_citation_label")

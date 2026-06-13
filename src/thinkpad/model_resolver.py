@@ -54,6 +54,7 @@ def resolve_thinkpad_model(query: str, manuals: list[ManualMetadata]) -> ModelRe
 
     exact_candidates: list[ModelCandidate] = []
     broad_candidates: list[ModelCandidate] = []
+    unsupported_generation_candidates: list[ModelCandidate] = []
 
     for manual in manuals:
         for model in manual.models:
@@ -79,6 +80,15 @@ def resolve_thinkpad_model(query: str, manuals: list[ManualMetadata]) -> ModelRe
                         matched_on=[f"model:{parts.base}"],
                     )
                 )
+            elif parts.generation and _has_explicit_generation(normalized_query):
+                unsupported_generation_candidates.append(
+                    _candidate(
+                        manual=manual,
+                        canonical_model=parts.canonical_model,
+                        confidence=0.5,
+                        matched_on=[f"model_family:{parts.base}", "unsupported_generation"],
+                    )
+                )
             else:
                 broad_candidates.append(
                     _candidate(
@@ -96,6 +106,16 @@ def resolve_thinkpad_model(query: str, manuals: list[ManualMetadata]) -> ModelRe
             candidates=candidates,
             clarification_needed=len(candidates) > 1 and _has_multiple_generations(candidates),
             reason="model_generation_match",
+            machine_type_candidates=_candidate_machine_types(candidates),
+        )
+
+    if unsupported_generation_candidates:
+        candidates = _dedupe_candidates(unsupported_generation_candidates)
+        return ModelResolution(
+            query=query,
+            candidates=candidates,
+            clarification_needed=True,
+            reason="unsupported_generation",
             machine_type_candidates=_candidate_machine_types(candidates),
         )
 
@@ -197,7 +217,17 @@ def _split_model(model: str) -> _ModelParts:
 
 
 def _contains_generation(normalized_query: str, generation: str) -> bool:
-    return _contains_phrase(normalized_query, f"gen {generation}")
+    pattern = re.compile(rf"\bgen {re.escape(generation)}\b")
+    for match in pattern.finditer(normalized_query):
+        prefix = normalized_query[max(0, match.start() - 32) : match.start()]
+        if re.search(r"(?:\bnot\b|\bnot use\b|\bdo not use\b)\s*$", prefix):
+            continue
+        return True
+    return False
+
+
+def _has_explicit_generation(normalized_query: str) -> bool:
+    return bool(re.search(r"\bgen [0-9]+\b", normalized_query))
 
 
 def _contains_phrase(normalized_query: str, normalized_phrase: str) -> bool:

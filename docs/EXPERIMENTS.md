@@ -1533,3 +1533,135 @@ Result:
 | Review/fail | 0 |
 
 Decision: sampled procedure/table/figure/warning records have valid page and record signals. This does not replace a full human audit of all extracted candidates.
+
+## M8.3-001: Agent And Evaluator Remediation Tests
+
+- Date: 2026-06-13
+- Hypothesis: targeted changes can improve strict evaluation without weakening grounding rules.
+
+Commands:
+
+```powershell
+$env:TEMP='D:\ThinkPad_Service_Copilot_MCP\data\tmp\sys_temp'; $env:TMP=$env:TEMP
+.\.venv\Scripts\python -m pytest tests\thinkpad -q
+
+$env:TEMP='D:\ThinkPad_Service_Copilot_MCP\data\tmp\sys_temp'; $env:TMP=$env:TEMP
+.\.venv\Scripts\python -m pytest tests\unit\test_smoke_imports.py -q
+
+$env:TEMP='D:\ThinkPad_Service_Copilot_MCP\data\tmp\sys_temp'; $env:TMP=$env:TEMP
+.\.venv\Scripts\python -m pytest tests\e2e\test_dashboard_smoke.py -q
+
+.\.venv\Scripts\ruff check src\thinkpad src\mcp_server\tools\thinkpad_tools.py tests\thinkpad scripts\thinkpad_*.py
+```
+
+Results:
+
+| Command | Result |
+|---|---|
+| `pytest tests\thinkpad -q` | Passed, 100 tests. |
+| `pytest tests\unit\test_smoke_imports.py -q` | Passed, 22 tests. |
+| `pytest tests\e2e\test_dashboard_smoke.py -q` | Passed, 8 tests. |
+| `ruff check ...` | Passed. |
+
+Execution note: the default Windows temp directory had a local permission issue, so pytest was run with `TEMP` and `TMP` pointed at ignored `data\tmp\sys_temp`.
+
+## M8.3-002: Deterministic Strict Usability Run
+
+- Date: 2026-06-13
+- Hypothesis: revised strict citation semantics plus procedure-step planning should make the 120-case strict benchmark pass without hiding required evidence failures.
+
+Command:
+
+```powershell
+.\.venv\Scripts\python scripts\thinkpad_agent_evaluate.py --golden-set tests\fixtures\thinkpad_m8_2_reality_golden_set.json --manifest data\manifests\manuals_manifest.yaml --extracted-dir data\extracted\m3 --collection thinkpad_m4 --mode deterministic --strict-citation --output data\eval\m8_3_report_deterministic_strict.json
+```
+
+Result:
+
+| Metric | Value |
+|---|---:|
+| Cases | 120 |
+| Failed cases | 0 |
+| `passed_case_rate` | 1.0000 |
+| `final_plan_status_accuracy` | 1.0000 |
+| `per_step_citation_validity` | 1.0000 |
+| `required_record_type_coverage` | 1.0000 |
+| `required_evidence_coverage` | 1.0000 |
+
+Decision: M8.3 fixed the deterministic strict contract failures from M8.2. This is still a benchmark result, not open-world accuracy.
+
+## M8.3-003: Live Retrieval Strict Usability Run
+
+- Date: 2026-06-13
+- Hypothesis: live retrieval should remain clean after the agent/evaluator changes and should not regress strict metrics.
+
+Command:
+
+```powershell
+.\.venv\Scripts\python scripts\thinkpad_agent_evaluate.py --golden-set tests\fixtures\thinkpad_m8_2_reality_golden_set.json --manifest data\manifests\manuals_manifest.yaml --extracted-dir data\extracted\m3 --collection thinkpad_m4 --require-live-retrieval --strict-citation --output data\eval\m8_3_report_live_retrieval_strict.json
+```
+
+Result:
+
+| Metric | Value |
+|---|---:|
+| Cases | 120 |
+| Failed cases | 0 |
+| `passed_case_rate` | 1.0000 |
+| `provider_error_rate` | 0.0000 |
+| `retrieval_fallback_rate` | 0.0000 |
+| `latency_ms_p95` | 1594 ms |
+
+Decision: retrieval is not the current bottleneck for the M8.3 benchmark.
+
+## M8.3-004: Raw Live LLM Strict Usability Run
+
+- Date: 2026-06-13
+- Hypothesis: compact cited plan input and stricter JSON composition should raise raw LLM quality without relying on fallback.
+
+Command:
+
+```powershell
+.\.venv\Scripts\python scripts\thinkpad_agent_evaluate.py --golden-set tests\fixtures\thinkpad_m8_2_reality_golden_set.json --manifest data\manifests\manuals_manifest.yaml --extracted-dir data\extracted\m3 --collection thinkpad_m4 --live-llm --strict-live-llm --strict-citation --output data\eval\m8_3_report_raw_live_llm_strict.json
+```
+
+Result:
+
+| Metric | Value |
+|---|---:|
+| Cases | 120 |
+| Failed cases | 3 |
+| `passed_case_rate` | 0.9750 |
+| `raw_llm_success_rate` | 0.9375 |
+| `llm_citation_preservation` | 0.9375 |
+| `provider_error_rate` | 0.0250 |
+| `unsupported_claim_rate` | 0.0000 |
+| `strict_citation_accuracy` | 1.0000 |
+| `latency_ms_p95` | 52187 ms |
+
+Decision: raw LLM composition is much improved from M8.2, but provider timeout/error and latency are still real demo risks. Raw LLM-only planning should not be the default.
+
+## M8.3-005: Stress Live Retrieval Strict Run
+
+- Date: 2026-06-13
+- Hypothesis: alias and plan-generation cleanup should reduce non-gold stress failures.
+
+Command:
+
+```powershell
+.\.venv\Scripts\python scripts\thinkpad_agent_evaluate.py --golden-set data\eval\m8_1_agent_stress_candidates.json --manifest data\manifests\manuals_manifest.yaml --extracted-dir data\extracted\m3 --collection thinkpad_m4 --require-live-retrieval --strict-citation --output data\eval\m8_3_stress_live_retrieval_strict.json
+```
+
+Result:
+
+| Metric | Value |
+|---|---:|
+| Cases | 194 |
+| Failed cases | 6 |
+| `passed_case_rate` | 0.9691 |
+| `final_plan_status_accuracy` | 0.9691 |
+| `required_record_type_coverage` | 0.9794 |
+| `per_step_citation_validity` | 0.9794 |
+| `provider_error_rate` | 0.0000 |
+
+Decision: remaining stress failures are concentrated in generated FRU procedure applicability conflicts, especially X1 Carbon queries paired with Yoga-only pen procedure labels and WWAN availability mismatch. The stress set remains a pressure test, not gold truth.

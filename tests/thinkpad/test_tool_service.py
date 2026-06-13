@@ -53,6 +53,18 @@ def _service() -> ThinkPadToolService:
                 },
                 "citation": _citation(72, "1050"),
             },
+            {
+                "record_id": "battery_screw_decimal",
+                "manual_id": GEN9_MANUAL,
+                "page": 73,
+                "table_type": "screw_spec",
+                "columns": ["Component", "Screw"],
+                "row": {
+                    "Component": "Built-in battery",
+                    "Screw": "M2.0 × 5.0 mm",
+                },
+                "citation": _citation(73, "1050"),
+            },
         ],
         fru_procedures=[
             {
@@ -163,6 +175,10 @@ def test_get_screw_spec_normalizes_screw_size_multiplication_forms() -> None:
         assert response["status"] == "ok"
         assert response["results"][0]["record_id"] == "battery_screw"
         assert response["results"][0]["row"]["Screw"] == "M2 × 3 mm"
+
+    decimal = service.get_screw_spec("X1 Carbon Gen 9", "M2 x 5")
+    assert decimal["status"] == "ok"
+    assert decimal["results"][0]["record_id"] == "battery_screw_decimal"
 
 
 def test_lookup_error_code_exact_matching_survives_screw_normalization() -> None:

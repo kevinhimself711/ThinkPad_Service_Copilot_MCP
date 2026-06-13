@@ -686,10 +686,31 @@ def _contains_text(text: str, query: str) -> bool:
 
 def _normalize_lookup_text(value: str) -> str:
     normalized = value.lower()
-    normalized = normalized.replace("×", "x").replace("*", "x")
-    normalized = re.sub(r"\bm\s*([0-9]+(?:\.[0-9]+)?)\s*x\s*([0-9]+(?:\.[0-9]+)?)\b", r"m\1x\2", normalized)
+    normalized = (
+        normalized.replace("×", "x")
+        .replace("¡Á", "x")
+        .replace("¡á", "x")
+        .replace("*", "x")
+    )
+    normalized = re.sub(r"\bsolid[- ]state drive\b|\bstorage drive\b|\bstorage device\b", "ssd", normalized)
+    normalized = re.sub(r"[-‐‑–—]+", " ", normalized)
+    normalized = re.sub(
+        r"\bm\s*([0-9]+(?:\.[0-9]+)?)\s*x\s*(l?\s*[0-9]+(?:\.[0-9]+)?)\b",
+        _compact_screw_dimension,
+        normalized,
+    )
     normalized = re.sub(r"\s+", " ", normalized).strip()
     return normalized
+
+
+def _compact_screw_dimension(match: re.Match[str]) -> str:
+    width = _strip_decimal_zero(match.group(1))
+    length = _strip_decimal_zero(match.group(2).replace(" ", ""))
+    return f"m{width}x{length}"
+
+
+def _strip_decimal_zero(value: str) -> str:
+    return re.sub(r"\.0(?=\D|$)", "", value)
 
 
 def _screw_rank(record: dict[str, Any]) -> tuple[int, str]:
