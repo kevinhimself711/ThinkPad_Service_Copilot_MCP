@@ -72,7 +72,40 @@ Preferred strategy:
 
 ---
 
-## 3. Instruction Precedence
+## 3. Current Project Status
+
+Current baseline:
+
+- Active branch: `thinkpad-hmm-domain`
+- Latest verified remote commit: `1b19a76 fix(thinkpad): complete M8.4 human gold live baseline`
+- Completed milestones: M0 through M8.4c
+- Current next milestone: M9 packaging and interview readiness
+
+Current capability status:
+
+- M0-M2: upstream bootstrap, ThinkPad documentation consolidation, domain schemas, manifest validation, and model resolver are complete.
+- M3: HMM-aware local extraction is complete as structured candidates. These records are not all manually audited gold facts.
+- M4: DashScope/Bailian embedding, rerank, and LLM providers are integrated; ThinkPad retrieval corpus, index CLI, query CLI, and domain rerank rules exist.
+- M5: ThinkPad-specific MCP evidence tools are implemented and registered.
+- M6-M7: evaluation baseline, lightweight dashboard view, FRU dependency graph, and `get_fru_dependency_chain` are implemented.
+- M8-M8.4c: local repair-planning agent, agent evaluation, anti-inflation benchmarks, human gold review workflow, human gold fixture, and live DashScope baselines are complete.
+
+M8.4c results define the current quality boundary:
+
+- Human gold deterministic strict: 18 cases, 0 failures.
+- Human gold live retrieval strict: 18 cases, 0 failures.
+- Human gold raw live LLM strict: 18 cases, 2 provider-timeout failures.
+- 120-case deterministic strict: 120 cases, 0 failures.
+- 120-case live retrieval strict: 120 cases, 0 failures.
+- 120-case raw live LLM strict: 120 cases, 2 provider-timeout failures.
+
+Do not describe these results as universal open-world repair accuracy. They are benchmark-contract and human-gold evidence over defined fixtures. Raw LLM-only repair planning is not the default demo path. The default user-facing behavior should remain deterministic validation plus evidence-grounded fallback, with raw live LLM strict metrics reported separately.
+
+M9 should focus on packaging and interview readiness: Docker/compose, CI, README, demo script, final narrative, and resume/interview materials. M9 should not hide M8.4c provider-timeout risk with packaging polish.
+
+---
+
+## 4. Instruction Precedence
 
 When instructions conflict, follow this order:
 
@@ -87,7 +120,7 @@ If a requirement is ambiguous and implementation can proceed safely, make a cons
 
 ---
 
-## 4. Required Reading Before Coding
+## 5. Required Reading Before Coding
 
 Before making non-trivial changes, inspect the relevant files. Do not rely on memory.
 
@@ -107,12 +140,17 @@ Always check:
   - `docs/IMPLEMENTATION_LOG.md`
   - `docs/INTERVIEW_NOTES.md` if present locally
   - `docs/EVAL_REPORT.md`
+  - `docs/M8_AGENT_PERFORMANCE_BASELINE.md`
+  - `docs/M8_1_REMEDIATION_REPORT.md`
+  - `docs/M8_2_EVAL_REALITY_CHECK.md`
+  - `docs/M8_3_OPTIMIZATION_REPORT.md`
+  - `docs/M8_4_HUMAN_GOLD_REPORT.md`
 
 If a referenced file does not exist, do not fail the task. Create it only when it is directly needed by the requested change.
 
 ---
 
-## 5. Development Style
+## 6. Development Style
 
 ### General engineering rules
 
@@ -154,7 +192,7 @@ When adding a feature, update the relevant docs:
 
 ---
 
-## 6. Domain Non-Negotiables
+## 7. Domain Non-Negotiables
 
 These rules define the ThinkPad HMM vertical. Do not violate them.
 
@@ -229,7 +267,7 @@ For battery, power, system board, charging, display, or DANGER / CAUTION content
 
 ---
 
-## 7. Data Governance and Copyright Rules
+## 8. Data Governance and Copyright Rules
 
 Lenovo HMM PDFs are copyrighted. Public repository content must not redistribute Lenovo manuals or full extracted manual text.
 
@@ -267,29 +305,36 @@ If tests need data, create synthetic mini-manual fixtures under `tests/fixtures/
 
 ---
 
-## 8. Recommended Repository Layout
+## 9. Current Repository Layout
 
-Preserve upstream layout where possible. Add domain modules with clear boundaries.
+Preserve upstream layout where possible. Domain implementation now lives primarily under `src/thinkpad/`, ThinkPad MCP tool registration lives under the existing MCP server tool package, and local data remains under ignored `data/` paths.
 
-Suggested additions:
+Current tracked ThinkPad domain modules:
 
 ```text
 src/
   thinkpad/
     __init__.py
-    manifest.py
-    metadata.py
-    model_resolver.py
-    hmm_loader.py
-    hmm_splitter.py
-    table_extractor.py
-    figure_extractor.py
-    image_captioning.py
-    fru_graph.py
+    agent.py
+    agent_evaluation.py
     domain_reranker.py
+    evaluation.py
+    extraction.py
+    figure_extractor.py
+    fru_extractor.py
+    fru_graph.py
+    hmm_loader.py
+    lenovo.py
+    manifest.py
+    model_resolver.py
+    models.py
+    retrieval.py
+    retrieval_corpus.py
+    retrieval_index.py
     safety.py
-    mcp_tools.py
-    evals.py
+    spike.py
+    table_extractor.py
+    tool_service.py
 
 docs/
   PROJECT_GUIDE.md
@@ -298,31 +343,47 @@ docs/
   EXPERIMENTS.md
   EVAL_REPORT.md
   INTERVIEW_NOTES.md             # local/private; do not commit unless explicitly requested
+  M8_AGENT_PERFORMANCE_BASELINE.md
+  M8_1_REMEDIATION_REPORT.md
+  M8_2_EVAL_REALITY_CHECK.md
+  M8_3_OPTIMIZATION_REPORT.md
+  M8_4_HUMAN_GOLD_REPORT.md
 
 config/
-  thinkpad.yaml
   manuals_manifest.example.yaml
 
 tests/
   thinkpad/
+    test_agent.py
+    test_agent_evaluation.py
     test_manifest.py
     test_model_resolver.py
-    test_hmm_splitter.py
     test_table_extractor.py
     test_fru_graph.py
     test_domain_reranker.py
-    test_mcp_tools.py
+    test_thinkpad_mcp_tools.py
   fixtures/
-    mini_hmm_sample.md
-    mini_hmm_tables.json
-    mini_manifest.yaml
+    thinkpad_m6_golden_set.json
+    thinkpad_m7_golden_set.json
+    thinkpad_m8_agent_golden_set.json
+    thinkpad_m8_2_reality_golden_set.json
+    thinkpad_m8_4_human_gold_set.json
 ```
 
-Do not create this layout blindly if the upstream project already has equivalent conventions. Adapt to existing structure.
+Current ThinkPad script families:
+
+- Manual discovery/download/spike: `thinkpad_discover_manuals.py`, `thinkpad_download_manuals.py`, `thinkpad_spike_inspect.py`
+- Extraction: `thinkpad_extract_hmm.py`
+- Retrieval: `thinkpad_build_retrieval_index.py`, `thinkpad_query_retrieval.py`
+- Evidence evaluation: `thinkpad_evaluate.py`, `thinkpad_audit_milestones.py`
+- Agent: `thinkpad_agent_plan.py`, `thinkpad_agent_evaluate.py`, `thinkpad_generate_agent_eval_candidates.py`
+- Human gold: `thinkpad_prepare_human_gold_review.py`, `thinkpad_finalize_human_gold.py`
+
+Do not add legacy placeholder modules such as `hmm_splitter.py`, `image_captioning.py`, `mcp_tools.py`, or `evals.py` unless a new implementation explicitly justifies them. Prefer the existing module names above.
 
 ---
 
-## 9. Domain Data Contracts
+## 10. Domain Data Contracts
 
 Use these contracts as the conceptual target. Exact implementation may use dataclasses, Pydantic, TypedDict, or project-native models.
 
@@ -414,11 +475,11 @@ class FRUNode:
 
 ---
 
-## 10. MCP Tool Design
+## 11. MCP Tool Design
 
-The upstream general tool `query_knowledge_hub` may remain available, but ThinkPad-specific tools must be added because this project is agent-oriented.
+The upstream general tool `query_knowledge_hub` may remain available. ThinkPad-specific MCP evidence tools are already implemented through the ThinkPad tool service and MCP tool registration layer.
 
-Preferred MCP tools:
+Implemented ThinkPad MCP tools:
 
 ### `list_supported_models`
 
@@ -481,13 +542,17 @@ Must not claim image-derived torque/specs unless verified by text/table.
 
 Returns relevant DANGER / CAUTION / battery / ESD / system-board warnings for a model/component.
 
+Future candidate, not currently implemented:
+
 ### `compare_generations`
 
 Compares the same component/procedure across model generations, used for disambiguation demos and evaluation.
 
+Do not assume `compare_generations` exists when writing tests, docs, or demos unless it is explicitly implemented in a future milestone.
+
 ---
 
-## 11. Retrieval and Reranking Rules
+## 12. Retrieval and Reranking Rules
 
 Keep upstream hybrid retrieval. Add domain-specific rules after coarse retrieval.
 
@@ -527,7 +592,7 @@ Every domain rerank decision should be traceable in query logs or debug output.
 
 ---
 
-## 12. Ingestion Spike First
+## 13. Ingestion Spike First
 
 Before full-scale ingestion, implement a risk-validation spike using 5-8 representative manuals.
 
@@ -573,7 +638,7 @@ Do not ingest 50 manuals until the spike has been documented.
 
 ---
 
-## 13. Evaluation Requirements
+## 14. Evaluation Requirements
 
 Evaluation is not optional. This project must avoid subjective claims such as "it works well".
 
@@ -638,16 +703,40 @@ Track at minimum:
 
 Record experiments in `docs/EXPERIMENTS.md` or `docs/EVAL_REPORT.md`.
 
+Current committed evaluation fixtures:
+
+- `tests/fixtures/thinkpad_m6_golden_set.json`
+- `tests/fixtures/thinkpad_m7_golden_set.json`
+- `tests/fixtures/thinkpad_m8_agent_golden_set.json`
+- `tests/fixtures/thinkpad_m8_2_reality_golden_set.json`
+- `tests/fixtures/thinkpad_m8_4_human_gold_set.json`
+
+Current evaluation reports:
+
+- `docs/EVAL_REPORT.md`
+- `docs/M8_AGENT_PERFORMANCE_BASELINE.md`
+- `docs/M8_1_REMEDIATION_REPORT.md`
+- `docs/M8_2_EVAL_REALITY_CHECK.md`
+- `docs/M8_3_OPTIMIZATION_REPORT.md`
+- `docs/M8_4_HUMAN_GOLD_REPORT.md`
+
+Evaluation interpretation rules after M8.4c:
+
+- Report deterministic strict, live retrieval strict, and raw live LLM strict separately.
+- Treat the M8.4 human gold fixture as the highest-priority M9 gate.
+- Do not collapse recovered user-visible success and raw provider/LLM quality into one headline metric.
+- Preserve provider failures such as `provider_timeout` in reports; do not hide them behind fallback success.
+
 ---
 
-## 14. Agentic RAG and Graph RAG Scope
+## 15. Agentic RAG and Graph RAG Scope
 
-After the MCP server works, deepen the project in this order:
+The MCP evidence layer, graph tool, and local agent client now exist. Future work should deepen them in this order:
 
-1. Build FRU dependency graph.
-2. Expose graph traversal through `get_fru_dependency_chain`.
-3. Build a simple repair-planning agent client.
-4. Keep backend productionization to table-stakes unless explicitly requested.
+1. Keep deterministic evidence tools as the source of truth.
+2. Keep `get_fru_dependency_chain` as graph evidence, not a buzzword feature.
+3. Use the local repair-planning agent for demos with deterministic validation and evidence fallback.
+4. Package and document the system for M9 before adding new core agent scope.
 
 ### Agent workflow
 
@@ -696,7 +785,7 @@ Do not use Graph RAG as a buzzword. Use it only for relationship and multi-hop q
 
 ---
 
-## 15. Productionization Scope
+## 16. Productionization Scope
 
 For internship-oriented Agent/LLM/RAG roles, productionization should be useful but not dominate the project.
 
@@ -720,7 +809,7 @@ Do not delay RAG, evaluation, or agent workflow work to overbuild infrastructure
 
 ---
 
-## 16. Testing Instructions
+## 17. Testing Instructions
 
 Before finishing a coding task, run the most relevant tests.
 
@@ -732,7 +821,8 @@ Common commands may include:
 pytest
 pytest tests/thinkpad
 ruff check .
-python -m pytest tests/thinkpad/test_hmm_splitter.py
+python -m pytest tests/thinkpad/test_agent.py
+python -m pytest tests/thinkpad/test_thinkpad_mcp_tools.py
 ```
 
 Do not claim tests passed unless they were actually run. If tests cannot be run because dependencies, data, or credentials are missing, state exactly what was not run and why.
@@ -748,6 +838,7 @@ Rules:
 - Prefer the smallest useful live test first, then scale only when needed.
 - Record live commands, aggregate results, failures, and follow-up decisions in `docs/EXPERIMENTS.md` and `docs/IMPLEMENTATION_LOG.md`.
 - Keep generated indexes, traces, and provider outputs under ignored local data paths.
+- If a user provides an API key in chat, use it only as a transient shell environment variable and do not paste it into tracked files or final reports. Recommend rotation when appropriate because chat exposure is outside repo control.
 
 ### Test expectations
 
@@ -767,7 +858,7 @@ Use synthetic fixtures rather than copyrighted full manuals.
 
 ---
 
-## 17. Error Handling and Observability
+## 18. Error Handling and Observability
 
 The project must be inspectable. When something fails, developers should know where and why.
 
@@ -795,7 +886,7 @@ Use existing dashboard/trace infrastructure when possible.
 
 ---
 
-## 18. LLM Usage Rules
+## 19. LLM Usage Rules
 
 LLM calls may be used for:
 
@@ -816,6 +907,8 @@ LLM calls must not be used as the sole source of truth for:
 
 For exact facts, prefer structured table records and cited HMM text.
 
+After M8.4c, raw live LLM strict still has provider-timeout failures. Do not make raw LLM-only planning the default demo or MCP behavior. LLM composition may rewrite cited evidence into a repair plan only after deterministic evidence validation, and fallback behavior must remain visible in metrics.
+
 When LLM output is parsed into structured data:
 
 - Validate against schema.
@@ -825,7 +918,7 @@ When LLM output is parsed into structured data:
 
 ---
 
-## 19. Task Workflow for Codex
+## 20. Task Workflow for Codex
 
 For each task, follow this workflow:
 
@@ -847,7 +940,7 @@ Implementation documentation is more detailed than the final Codex response. The
 
 ---
 
-## 20. Definition of Done
+## 21. Definition of Done
 
 A feature is done only when these are true:
 
@@ -869,81 +962,36 @@ For retrieval/evaluation features, also require:
 
 ---
 
-## 21. Phase Roadmap
+## 22. Phase Roadmap
 
 Use this roadmap unless the user gives a different one.
 
-### M0: Repository adaptation
+### Completed: M0-M8.4c
 
-- Fork/clone upstream.
-- Create branch `thinkpad-hmm-domain`.
-- Add this `AGENTS.md`.
-- Add `docs/PROJECT_GUIDE.md` if not present.
-- Confirm setup and baseline tests.
+- M0: upstream bootstrap and repository adaptation.
+- M1: 8-manual Lenovo HMM risk spike.
+- M2: domain data contracts, manifest validation, and model resolver.
+- M3: HMM-aware extraction layer for tables, figures, FRU procedures, dependency edges, and warnings.
+- M4: ThinkPad retrieval corpus, local index flow, DashScope providers, and domain rerank.
+- M5: ThinkPad-specific MCP evidence tools.
+- M6/M6.1: evaluation baseline, dashboard view, and screw normalization remediation.
+- M7/M7.1: FRU dependency graph, graph MCP tool, and M0-M7 audit.
+- M8/M8.1/M8.2/M8.3: repair-planning agent, scaled evaluation, anti-inflation benchmark, and usability remediation.
+- M8.4a/M8.4b/M8.4c: human gold review pack, human gold fixture, dependency-chain/safety fixes, and live baselines.
 
-### M1: Spike
-
-- Add manifest template.
-- Test 5-8 representative HMM manuals locally.
-- Validate R1-R4.
-- Write `docs/SPIKE_REPORT.md`.
-
-### M2: Domain data model
-
-- Implement metadata models.
-- Implement manifest parser.
-- Implement model resolver.
-- Add synthetic fixture tests.
-
-### M3: Ingestion enhancements
-
-- Add HMM-aware splitter.
-- Add table extraction pipeline.
-- Add figure extraction fallback.
-- Add image-caption integration.
-- Preserve citations and page numbers.
-
-### M4: Retrieval and rerank
-
-- Add domain filters.
-- Add domain reranker.
-- Add sparse exact-match improvements.
-- Add trace outputs.
-
-### M5: MCP tools
-
-- Implement ThinkPad-specific MCP tools.
-- Preserve upstream generic tools if useful.
-- Add schema tests and sample tool calls.
-
-### M6: Evaluation and dashboard
-
-- Create golden test set.
-- Compare retrieval baselines.
-- Add dashboard views or traces for ThinkPad-specific stages.
-
-### M7: Graph RAG
-
-- Extract FRU dependency graph.
-- Add graph traversal tool.
-- Evaluate dependency-chain questions.
-
-### M8: Agent client
-
-- Implement simple tool-calling repair planning agent.
-- Add trajectory examples.
-- Evaluate tool-call success and plan correctness.
-
-### M9: Packaging and interview readiness
+### Current next phase: M9 Packaging And Interview Readiness
 
 - Add Docker and CI.
-- Write final README.
-- Write demo script.
+- Write final README and demo script.
 - Write resume bullets and interview notes.
+- Clean up docs so claims match M8.4c evidence.
+- Preserve raw-vs-recovered metric distinctions in all demo and interview materials.
+- Do not expose raw LLM-only repair planning as the default path.
+- Do not add broad new RAG/agent scope unless M9 packaging reveals a specific blocker.
 
 ---
 
-## 22. Commit and PR Guidance
+## 23. Commit and PR Guidance
 
 If committing is requested:
 
@@ -964,7 +1012,7 @@ Never commit local data artifacts, raw manuals, `.env`, vector stores, or large 
 
 ---
 
-## 23. Demo and Resume Orientation
+## 24. Demo and Resume Orientation
 
 Implementation choices should support a strong demo.
 
@@ -982,9 +1030,16 @@ The final project should support this resume-level claim:
 
 Do not implement features that cannot be explained in this narrative.
 
+M9 demo claims must also include the evaluation boundary:
+
+- deterministic and live retrieval baselines are clean on committed fixtures,
+- human gold exists and has priority over generated fixtures,
+- raw live LLM strict still has provider-timeout failures,
+- generated repair plans are evidence-grounded and validated rather than raw LLM-only.
+
 ---
 
-## 24. What Not To Do
+## 25. What Not To Do
 
 Do not:
 
@@ -999,10 +1054,13 @@ Do not:
 - Add dependencies without checking existing equivalents.
 - Hide failing tests or claim unrun tests passed.
 - Inflate metrics without reproducible evaluation artifacts.
+- Claim M8.4c metrics prove universal open-world repair accuracy.
+- Treat `compare_generations` as implemented before it actually exists.
+- Commit `docs/INTERVIEW_NOTES.md` unless explicitly requested.
 
 ---
 
-## 25. Final Operating Principle
+## 26. Final Operating Principle
 
 This project succeeds when it demonstrates engineering judgment.
 
