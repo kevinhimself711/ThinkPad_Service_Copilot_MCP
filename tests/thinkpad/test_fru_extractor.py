@@ -72,3 +72,38 @@ Remove the screws.
 
     assert [procedure.fru_id for procedure in procedures] == ["1010"]
     assert edges == []
+
+
+def test_extract_fru_procedures_adds_step_level_citations_across_pages():
+    pages = [
+        HMMPage(
+            manual_id="thinkpad_x1_carbon_gen9_hmm",
+            page=70,
+            source_url="https://download.lenovo.com/pccbbs/mobiles_pdf/x1_hmm.pdf",
+            text="""1050 Built-in battery
+
+Removal steps of the built-in battery
+Disconnect the battery connector.
+""",
+        ),
+        HMMPage(
+            manual_id="thinkpad_x1_carbon_gen9_hmm",
+            page=71,
+            source_url="https://download.lenovo.com/pccbbs/mobiles_pdf/x1_hmm.pdf",
+            text="""Remove the battery.
+When installing: Attach the connector firmly.
+""",
+        ),
+    ]
+
+    procedures, _ = extract_fru_procedures(_manual(), pages)
+
+    battery = procedures[0]
+    assert battery.page_start == 70
+    assert battery.page_end == 71
+    assert [step.text for step in battery.step_records[:2]] == [
+        "Disconnect the battery connector",
+        "Remove the battery",
+    ]
+    assert [step.citation.page_start for step in battery.step_records[:2]] == [70, 71]
+    assert [step.citation.section_id for step in battery.step_records[:2]] == ["1050", "1050"]

@@ -640,7 +640,7 @@ def _build_structured_plan(evidence: EvidenceBundle) -> list[RepairPlanStep]:
         )
     if evidence.procedure:
         item = evidence.procedure[0]
-        citation = item.get("citation") or {}
+        citation = _citation_with_source(item.get("citation") or {}, "procedure_context")
         prerequisites = _clean_text_list(item.get("prerequisites"))
         if prerequisites:
             steps.append(
@@ -653,16 +653,16 @@ def _build_structured_plan(evidence: EvidenceBundle) -> list[RepairPlanStep]:
                     [citation],
                 )
             )
-        procedure_steps = _procedure_plan_actions(item.get("steps"))
+        procedure_steps = _procedure_plan_action_records(item)
         if procedure_steps:
-            for procedure_index, action in enumerate(procedure_steps[:6], start=1):
+            for procedure_index, action_record in enumerate(procedure_steps[:6], start=1):
                 steps.append(
                     _step(
                         len(steps) + 1,
                         f"Follow FRU {item.get('fru_id') or ''} step {procedure_index}".strip(),
-                        action[:900],
+                        str(action_record.get("text") or "")[:900],
                         "fru_procedure",
-                        [citation],
+                        [action_record.get("citation") or citation],
                     )
                 )
         else:
@@ -672,7 +672,7 @@ def _build_structured_plan(evidence: EvidenceBundle) -> list[RepairPlanStep]:
                     f"Use FRU procedure {item.get('fru_id') or ''}".strip(),
                     f"Target FRU: {item.get('fru_name') or 'unknown component'}; follow the cited FRU procedure candidate.",
                     "fru_procedure",
-                    [citation],
+                    [_citation_with_source(item.get("citation") or {}, "procedure_fallback")],
                 )
             )
     if evidence.dependency_chain:
@@ -746,6 +746,42 @@ def _procedure_plan_actions(value: Any) -> list[str]:
     if actions:
         return actions
     return [text for text in _clean_text_list(value) if not _is_procedure_noise(text)]
+
+
+def _procedure_plan_action_records(item: dict[str, Any]) -> list[dict[str, Any]]:
+    records: list[dict[str, Any]] = []
+    raw_step_records = item.get("step_records")
+    if isinstance(raw_step_records, list):
+        for raw in raw_step_records:
+            if not isinstance(raw, dict):
+                continue
+            text = re.sub(r"\s+", " ", str(raw.get("text") or "")).strip()
+            if _is_procedure_noise(text) or not _is_action_like_procedure_text(text):
+                continue
+            citation = raw.get("citation") if isinstance(raw.get("citation"), dict) else {}
+            records.append(
+                {
+                    "text": text,
+                    "citation": _citation_with_source(
+                        citation,
+                        str(raw.get("citation_source") or "step_record"),
+                    ),
+                }
+            )
+    if records:
+        return records
+
+    fallback = _citation_with_source(item.get("citation") or {}, "procedure_fallback")
+    return [
+        {"text": text, "citation": fallback}
+        for text in _procedure_plan_actions(item.get("steps"))
+    ]
+
+
+def _citation_with_source(citation: dict[str, Any], source: str) -> dict[str, Any]:
+    value = dict(citation or {})
+    value["citation_source"] = source
+    return value
 
 
 def _is_procedure_noise(text: str) -> bool:
@@ -1126,6 +1162,7 @@ def _validate_plan(
     return {
         "minimum_citations_present": not missing_step_citations,
         "llm_citation_preserved": llm_citation_preserved,
+        "procedure_level_citation_fallback_rate": _procedure_level_citation_fallback_rate(repair_plan),
         "unsupported_claims": unsupported_claims,
         "unsupported_claim_count": len(unsupported_claims),
         "missing_citation_count": missing_citation_count,
@@ -1152,6 +1189,20 @@ def _failure_reason_from_validation(validation: dict[str, Any]) -> str | None:
     if int(validation.get("unsupported_claim_count") or 0) > 0:
         return "unsupported_claim"
     return None
+
+
+def _procedure_level_citation_fallback_rate(repair_plan: list[RepairPlanStep]) -> float:
+    procedure_steps = [
+        step for step in repair_plan
+        if str(step.evidence_type or "").lower() == "fru_procedure"
+    ]
+    if not procedure_steps:
+        return 0.0
+    fallback_count = 0
+    for step in procedure_steps:
+        if any(citation.get("citation_source") == "procedure_fallback" for citation in step.citations):
+            fallback_count += 1
+    return fallback_count / len(procedure_steps)
 
 
 def _classify_llm_failure(message: str) -> str:
@@ -1231,6 +1282,7 @@ def _normalize_validation(validation: dict[str, Any]) -> dict[str, Any]:
     normalized.setdefault("unsupported_claims", [])
     normalized.setdefault("unsupported_claim_count", len(normalized.get("unsupported_claims") or []))
     normalized.setdefault("missing_citation_count", 0)
+    normalized.setdefault("procedure_level_citation_fallback_rate", 0.0)
     normalized.setdefault("llm_repair_attempted", False)
     normalized.setdefault("llm_repair_succeeded", False)
     normalized.setdefault("failure_reason", None)
@@ -1286,6 +1338,8 @@ def _dedupe_citations(citations: list[dict[str, Any]]) -> list[dict[str, Any]]:
             "section": citation.get("section"),
             "section_id": citation.get("section_id"),
         }
+        if citation.get("citation_source"):
+            normalized["citation_source"] = citation.get("citation_source")
         if not normalized["manual_id"] or not normalized["page_start"]:
             continue
         key = tuple(normalized.get(field) for field in ("manual_id", "source_url", "page_start", "page_end", "section", "section_id"))

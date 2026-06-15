@@ -769,3 +769,37 @@ Raw live LLM strict failures were all `provider_timeout` and are preserved as fa
 ### Decision
 
 M8.4c closes the M8.4 live-baseline omission and removes the human-gold deterministic blockers. The project can proceed to M9 packaging and interview readiness, with this boundary: raw LLM-only repair planning is not the default demo path. M9 should present deterministic validated evidence planning and recovered LLM composition as the user-facing path, while reporting raw LLM strict metrics separately.
+
+## M8.5a Step-Level Citation Provenance
+
+- Date: 2026-06-15
+- Milestone: M8.5a Step-Level Citation Human Review Prep
+- Canonical report: `docs/M8_5_STEP_CITATION_REPORT.md`
+- Raw local review artifacts: ignored under `data/eval/`
+- Scope: add FRU step-level citation provenance, add evaluator step-page metrics, generate human annotation pack
+
+### Result
+
+M8.5a does not create a committed human gold fixture and does not run live retrieval or raw live LLM. That is intentional: live M8.5 baselines require human-reviewed `expected.step_pages`, which do not exist until the local review pack is annotated.
+
+Local extraction was rerun with step-level provenance:
+
+| Metric | Value |
+|---|---:|
+| FRU procedures extracted | 195 |
+| Procedures with `step_records` | 157 |
+| Procedures with multiple step pages | 92 |
+| Review candidates generated | 12 |
+| Multi-page review candidates | 7 |
+| Manuals covered | 8 |
+
+New evaluator metrics are available for M8.5b:
+
+- `step_page_accuracy`
+- `step_page_coverage`
+- `step_page_discriminability_cases`
+- `procedure_level_citation_fallback_rate`
+
+### Decision
+
+M8.5a reaches the annotation gate. The next step is human review of `data/eval/m8_5_step_citation_review.md`. M8.5b should only start after reviewed step pages are available.

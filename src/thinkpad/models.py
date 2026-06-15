@@ -174,6 +174,27 @@ class WarningRecord:
 
 
 @dataclass(frozen=True)
+class FRUStepRecord:
+    """One extracted FRU procedure step with step-level page grounding."""
+
+    step_index: int
+    text: str
+    citation: Citation
+    citation_source: str = "text_offset"
+
+    def __post_init__(self) -> None:
+        if self.step_index < 1:
+            raise DomainModelError("step_index must be >= 1")
+        _require_non_empty(self.text, "text")
+        _require_non_empty(self.citation_source, "citation_source")
+
+    def to_dict(self) -> dict[str, Any]:
+        """Return a JSON-safe representation."""
+
+        return asdict(self)
+
+
+@dataclass(frozen=True)
 class FRUProcedure:
     """FRU removal or replacement procedure with prerequisite and warning signals."""
 
@@ -183,6 +204,7 @@ class FRUProcedure:
     fru_name: str
     citation: Citation
     steps: list[str] = field(default_factory=list)
+    step_records: list[FRUStepRecord] = field(default_factory=list)
     prerequisites: list[str] = field(default_factory=list)
     warnings: list[WarningRecord] = field(default_factory=list)
     related_image_ids: list[str] = field(default_factory=list)
@@ -197,6 +219,13 @@ class FRUProcedure:
         _require_list(self.steps, "steps")
         _require_list(self.prerequisites, "prerequisites")
         _require_list(self.related_image_ids, "related_image_ids")
+        if not isinstance(self.step_records, list) or not all(
+            isinstance(item, FRUStepRecord) for item in self.step_records
+        ):
+            raise DomainModelError("step_records must be a list of FRUStepRecord")
+        for step in self.step_records:
+            if step.citation.manual_id != self.manual_id:
+                raise DomainModelError("step_records citation.manual_id must match procedure manual_id")
         if self.citation.manual_id != self.manual_id:
             raise DomainModelError("citation.manual_id must match procedure manual_id")
         if self.page_start is not None and self.page_start < 1:

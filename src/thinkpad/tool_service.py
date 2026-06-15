@@ -587,11 +587,35 @@ def _fru_result(record: dict[str, Any]) -> dict[str, Any]:
         "fru_id": record.get("fru_id"),
         "fru_name": record.get("fru_name"),
         "steps": record.get("steps") or [],
+        "step_records": _step_records_for(record),
         "prerequisites": record.get("prerequisites") or [],
         "warnings": record.get("warnings") or [],
         "related_image_ids": record.get("related_image_ids") or [],
         "citation": _citation_for(record),
     }
+
+
+def _step_records_for(record: dict[str, Any]) -> list[dict[str, Any]]:
+    raw_steps = record.get("step_records")
+    if not isinstance(raw_steps, list):
+        return []
+    normalized: list[dict[str, Any]] = []
+    for index, item in enumerate(raw_steps, start=1):
+        if not isinstance(item, dict):
+            continue
+        text = str(item.get("text") or "").strip()
+        if not text:
+            continue
+        citation = item.get("citation") if isinstance(item.get("citation"), dict) else {}
+        normalized.append(
+            {
+                "step_index": item.get("step_index") or index,
+                "text": text,
+                "citation": _citation_for({**record, "citation": citation}),
+                "citation_source": item.get("citation_source") or "unknown",
+            }
+        )
+    return normalized
 
 
 def _fru_dependency_chain_result(graph_result: dict[str, Any]) -> dict[str, Any]:

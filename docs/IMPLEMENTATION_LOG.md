@@ -1466,3 +1466,66 @@ Do not proceed directly to full M9 packaging. The next recommended milestone is 
 ### Handoff
 
 M8.4c closes the original M8.4 gate. M9 can proceed as packaging and interview readiness, as long as the default repair-planning demo keeps deterministic validation and evidence fallback rather than raw LLM-only planning.
+
+---
+
+## M8.5a: Step-Level Citation Human Review Prep
+
+- Date: 2026-06-15
+- User goal: Fix the M8.4 page-metric blind spot by adding real step-level FRU citations and preparing a human annotation pack before M9.
+- Scope included: FRU step provenance, service/agent propagation, evaluator step-page metrics, local review-pack generator, focused tests, local extraction refresh, docs.
+- Scope excluded: committed human step-gold fixture, M8.5 live retrieval baseline, M8.5 raw live LLM baseline, M9 packaging, new HMM downloads, committed `data/`, committed provider output, committed API key.
+
+### File-Level Changes
+
+| Change | Path | Implementation Fact |
+|---|---|---|
+| Modified | `src/thinkpad/models.py` | Added `FRUStepRecord` and backward-compatible `FRUProcedure.step_records` for step-level citation provenance. |
+| Modified | `src/thinkpad/fru_extractor.py` | Preserves combined-text page offsets and maps extracted FRU step lines to cited pages; filters page markers from extracted steps. |
+| Modified | `src/thinkpad/tool_service.py` | `get_fru_procedure` results now include normalized `step_records` when present in extracted JSONL. |
+| Modified | `src/thinkpad/agent.py` | Structured repair plans now prefer step-level FRU citations and record `procedure_level_citation_fallback_rate`. |
+| Modified | `src/thinkpad/agent_evaluation.py` | Added optional `expected.step_pages` support and step-level metrics: `step_page_accuracy`, `step_page_coverage`, and `step_page_discriminability_cases`. |
+| Added | `scripts/thinkpad_prepare_step_citation_review.py` | Generates ignored local M8.5a review JSON/Markdown with per-step candidate pages for human annotation. |
+| Modified | `tests/thinkpad/test_fru_extractor.py` | Added synthetic cross-page FRU procedure coverage. |
+| Modified | `tests/thinkpad/test_models.py` | Added serialization coverage for `FRUStepRecord`. |
+| Modified | `tests/thinkpad/test_tool_service.py` | Added propagation checks for FRU `step_records`. |
+| Modified | `tests/thinkpad/test_agent.py` | Added assertion that agent repair steps use step-level citation source instead of procedure fallback. |
+| Modified | `tests/thinkpad/test_agent_evaluation.py` | Added fractional step-page accuracy coverage. |
+| Added | `tests/thinkpad/test_step_citation_review.py` | Added review-pack generation tests with synthetic step records and missing-step-record failure coverage. |
+| Added | `docs/M8_5_STEP_CITATION_REPORT.md` | Added canonical M8.5 report and human annotation instructions. |
+| Modified | `docs/DEV_SPEC_THINKPAD.md` | Documented the M8.5 step-level citation contract. |
+| Modified | `docs/EVAL_REPORT.md` | Added M8.5a results and M8.5b gate. |
+| Modified | `docs/EXPERIMENTS.md` | Added M8.5a extraction, review-pack generation, and focused-test records. |
+| Modified | `docs/IMPLEMENTATION_LOG.md` | Added this M8.5a implementation record. |
+| Modified locally, not committed | `docs/INTERVIEW_NOTES.md` | Added M8.5 interview notes about why M8.4 page scoring did not have discriminability and why human step-gold must pause for annotation. |
+
+### Scripts And Commands
+
+| Script/Command | Purpose | Result |
+|---|---|---|
+| `.\.venv\Scripts\python -m pytest tests\thinkpad\test_fru_extractor.py tests\thinkpad\test_models.py tests\thinkpad\test_tool_service.py tests\thinkpad\test_agent.py tests\thinkpad\test_agent_evaluation.py tests\thinkpad\test_step_citation_review.py -q --basetemp data\tmp\pytest_m8_5a_focused` | Focused tests for M8.5a provenance and review-pack behavior. | Passed, 48 tests. |
+| `.\.venv\Scripts\ruff check src\thinkpad\models.py src\thinkpad\fru_extractor.py src\thinkpad\tool_service.py src\thinkpad\agent.py src\thinkpad\agent_evaluation.py scripts\thinkpad_prepare_step_citation_review.py tests\thinkpad\test_fru_extractor.py tests\thinkpad\test_models.py tests\thinkpad\test_tool_service.py tests\thinkpad\test_agent.py tests\thinkpad\test_agent_evaluation.py tests\thinkpad\test_step_citation_review.py` | Focused lint. | Passed. |
+| `.\.venv\Scripts\python scripts\thinkpad_extract_hmm.py --manifest data\manifests\manuals_manifest.yaml --output-dir data\extracted\m3` | Refresh ignored local extraction with `step_records`. | First run timed out at 5 minutes and was stopped; rerun with longer timeout completed successfully. |
+| `.\.venv\Scripts\python scripts\thinkpad_prepare_step_citation_review.py --manifest data\manifests\manuals_manifest.yaml --extracted-dir data\extracted\m3 --output data\eval\m8_5_step_citation_review.json --markdown-output data\eval\m8_5_step_citation_review.md` | Generate ignored human step-page review pack. | Passed; 12 candidates, 7 multi-page, 8 manuals covered. |
+
+### Local Extraction And Review-Pack Results
+
+| Metric | Value |
+|---|---:|
+| FRU procedures extracted | 195 |
+| Procedures with `step_records` | 157 |
+| Procedures with multiple step pages | 92 |
+| Review candidates generated | 12 |
+| Multi-page review candidates | 7 |
+| Manuals covered by review pack | 8 |
+
+### Deviations And Risks
+
+- M8.5a does not run live retrieval or raw live LLM. That is intentional because the committed M8.5 human step-gold fixture does not exist until the user finishes annotation.
+- The review pack is generated from extractor candidates. A human must still reject heading fragments, OCR fragments, or any candidate that is not suitable as gold.
+- Step-level citation currently depends on text extraction line offsets. This is good enough for review candidates but must be validated against PDF pages before being treated as gold.
+- The full extraction refresh takes several minutes. The first run timed out at 5 minutes; longer timeout completed.
+
+### Handoff
+
+Next action is human annotation of `data/eval/m8_5_step_citation_review.md`. M8.5b should finalize only verified/corrected step annotations into a committed fixture, then run deterministic, live retrieval, and raw live LLM strict baselines.

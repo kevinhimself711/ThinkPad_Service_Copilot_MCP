@@ -2056,3 +2056,79 @@ Result:
 | `git diff --check` | Passed with line-ending warnings only. |
 
 Decision: M8.4c is ready for commit after secret scan and documentation review.
+
+## M8.5a-001: Step-Level FRU Extraction Refresh
+
+- Date: 2026-06-15
+- Hypothesis: FRU extraction can add step-level citations without changing the ignored local data governance boundary.
+
+Command:
+
+```powershell
+.\.venv\Scripts\python scripts\thinkpad_extract_hmm.py --manifest data\manifests\manuals_manifest.yaml --output-dir data\extracted\m3
+```
+
+Result:
+
+| Metric | Value |
+|---|---:|
+| Manuals | 8 |
+| Pages | 877 |
+| FRU procedures | 195 |
+| Dependency edges | 535 |
+| Warnings | 679 |
+| Procedures with `step_records` | 157 |
+| Procedures with multiple step pages | 92 |
+
+Notes:
+
+- First run with a 5-minute timeout was interrupted and left old extraction data without `step_records`.
+- The residual Python process was stopped.
+- The command was rerun with a longer timeout and completed successfully in about 9 minutes.
+
+Decision: local ignored extraction data is ready for M8.5a review-pack generation.
+
+## M8.5a-002: Step Citation Review Pack Generation
+
+- Date: 2026-06-15
+- Hypothesis: local extracted `step_records` can produce a human-review pack with real step-level page candidates.
+
+Command:
+
+```powershell
+.\.venv\Scripts\python scripts\thinkpad_prepare_step_citation_review.py --manifest data\manifests\manuals_manifest.yaml --extracted-dir data\extracted\m3 --output data\eval\m8_5_step_citation_review.json --markdown-output data\eval\m8_5_step_citation_review.md
+```
+
+Result:
+
+| Metric | Value |
+|---|---:|
+| Review candidates | 12 |
+| Multi-page candidates | 7 |
+| Manuals covered | 8 |
+| Output JSON | `data/eval/m8_5_step_citation_review.json` |
+| Output Markdown | `data/eval/m8_5_step_citation_review.md` |
+
+Decision: M8.5a is at the human annotation gate. These outputs remain ignored and are not committed.
+
+## M8.5a-003: Focused Tests
+
+- Date: 2026-06-15
+- Hypothesis: step-level provenance should be covered at extractor, service, agent, evaluator, and review-pack layers.
+
+Commands:
+
+```powershell
+.\.venv\Scripts\python -m pytest tests\thinkpad\test_fru_extractor.py tests\thinkpad\test_models.py tests\thinkpad\test_tool_service.py tests\thinkpad\test_agent.py tests\thinkpad\test_agent_evaluation.py tests\thinkpad\test_step_citation_review.py -q --basetemp data\tmp\pytest_m8_5a_focused
+
+.\.venv\Scripts\ruff check src\thinkpad\models.py src\thinkpad\fru_extractor.py src\thinkpad\tool_service.py src\thinkpad\agent.py src\thinkpad\agent_evaluation.py scripts\thinkpad_prepare_step_citation_review.py tests\thinkpad\test_fru_extractor.py tests\thinkpad\test_models.py tests\thinkpad\test_tool_service.py tests\thinkpad\test_agent.py tests\thinkpad\test_agent_evaluation.py tests\thinkpad\test_step_citation_review.py
+```
+
+Result:
+
+| Command | Result |
+|---|---|
+| Focused pytest | Passed, 48 tests. |
+| Focused ruff | Passed. |
+
+Decision: focused M8.5a behavior is covered before full regression.

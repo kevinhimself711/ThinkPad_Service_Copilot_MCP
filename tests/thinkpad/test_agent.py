@@ -52,8 +52,12 @@ def test_agent_machine_type_plan_calls_expected_tools_and_cites() -> None:
     assert all("get_screw_spec" != trace.tool for trace in result.tool_trace)
     assert result.repair_plan
     assert any(step.action == "Remove the built-in battery." for step in result.repair_plan)
+    battery_steps = [step for step in result.repair_plan if step.action == "Remove the built-in battery."]
+    assert battery_steps[0].citations[0]["page_start"] == 72
+    assert battery_steps[0].citations[0]["citation_source"] == "text_offset"
     assert result.citations
     assert result.validation["minimum_citations_present"] is True
+    assert result.validation["procedure_level_citation_fallback_rate"] == 0.0
 
 
 def test_agent_screw_query_uses_screw_lookup_without_procedure_tools() -> None:
@@ -218,6 +222,14 @@ def _service_with_records() -> ThinkPadToolService:
             "page_start": 70,
             "page_end": 71,
             "steps": ["Remove the base cover assembly."],
+            "step_records": [
+                {
+                    "step_index": 1,
+                    "text": "Remove the base cover assembly.",
+                    "citation": citation_1010,
+                    "citation_source": "text_offset",
+                }
+            ],
             "prerequisites": [],
         },
         {
@@ -229,6 +241,14 @@ def _service_with_records() -> ThinkPadToolService:
             "page_start": 72,
             "page_end": 73,
             "steps": ["Remove the built-in battery."],
+            "step_records": [
+                {
+                    "step_index": 1,
+                    "text": "Remove the built-in battery.",
+                    "citation": citation_1020,
+                    "citation_source": "text_offset",
+                }
+            ],
             "prerequisites": ["1010 Base cover assembly"],
         },
     ]

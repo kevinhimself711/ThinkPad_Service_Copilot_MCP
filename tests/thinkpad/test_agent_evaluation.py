@@ -9,6 +9,7 @@ from src.thinkpad.agent import EvidenceBundle, RepairPlanResult, RepairPlanStep
 from src.thinkpad.agent_evaluation import (
     ThinkPadAgentGoldenCase,
     _per_step_page_coverage,
+    _step_page_accuracy,
     evaluate_thinkpad_agent_cases,
     load_thinkpad_agent_golden_set,
 )
@@ -258,6 +259,37 @@ def test_per_step_page_coverage_scores_only_fru_procedure_steps() -> None:
     assert _per_step_page_coverage(result, {70, 71}) == 0.5
 
 
+def test_step_page_accuracy_scores_fractional_agent_action_pages() -> None:
+    result = RepairPlanResult(
+        status="ok",
+        clarification_needed=False,
+        query="battery removal",
+        message="ok",
+        request={},
+        evidence_bundle=EvidenceBundle(),
+        repair_plan=[
+            _action_step(1, 70),
+            _action_step(2, 72),
+            _action_step(3, 73),
+            _plan_step("step_04", "warning", 5),
+        ],
+        citations=[
+            {"manual_id": "manual_a", "page_start": 70},
+            {"manual_id": "manual_a", "page_start": 72},
+            {"manual_id": "manual_a", "page_start": 73},
+        ],
+    )
+
+    assert _step_page_accuracy(
+        result,
+        {
+            1: {70},
+            2: {71},
+            3: {73},
+        },
+    ) == pytest.approx(2 / 3)
+
+
 def test_agent_evaluator_raw_live_llm_success_metric() -> None:
     service = _service_with_records()
     service._retriever = _empty_retriever  # noqa: SLF001 - test injection
@@ -333,6 +365,16 @@ def _plan_step(step_id: str, evidence_type: str, page: int) -> RepairPlanStep:
         title=step_id,
         action="Synthetic action",
         evidence_type=evidence_type,
+        citations=[{"manual_id": "manual_a", "page_start": page}],
+    )
+
+
+def _action_step(step_index: int, page: int) -> RepairPlanStep:
+    return RepairPlanStep(
+        step_id=f"step_{step_index:02d}",
+        title=f"Follow FRU 1050 step {step_index}",
+        action=f"Synthetic action {step_index}",
+        evidence_type="fru_procedure",
         citations=[{"manual_id": "manual_a", "page_start": page}],
     )
 

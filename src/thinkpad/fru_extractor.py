@@ -6,7 +6,7 @@ import re
 from dataclasses import dataclass
 
 from src.thinkpad.manifest import ManualMetadata
-from src.thinkpad.models import Citation, DependencyEdge, FRUProcedure, HMMPage
+from src.thinkpad.models import Citation, DependencyEdge, FRUProcedure, FRUStepRecord, HMMPage
 
 _FRU_HEADING_RE = re.compile(r"(?m)^\s*(?P<fru_id>\d{4})\s+(?P<name>[A-Za-z][^\n]{2,120})$")
 _FRU_REF_RE = re.compile(r"\b(?P<fru_id>[1-9]\d{3})\s+(?P<name>[A-Za-z][A-Za-z0-9 .()&+-]{2,100})")
@@ -27,6 +27,9 @@ class _Section:
     page_start: int
     page_end: int
     text: str
+    raw_text: str
+    start_offset: int
+    page_offsets: list[tuple[int, int]]
 
 
 def extract_fru_procedures(
@@ -56,7 +59,8 @@ def extract_fru_procedures(
                 fru_id=section.fru_id,
                 fru_name=section.fru_name,
                 citation=citation,
-                steps=_extract_steps(section.text),
+                steps=_extract_steps(section),
+                step_records=_extract_step_records(manual, section),
                 prerequisites=prerequisites,
                 page_start=section.page_start,
                 page_end=section.page_end,
@@ -116,7 +120,8 @@ def _find_sections(pages: list[HMMPage]) -> list[_Section]:
     for index, match in enumerate(heading_matches):
         start = match.start()
         end = heading_matches[index + 1].start() if index + 1 < len(heading_matches) else len(combined)
-        text = combined[start:end].strip()
+        raw_text = combined[start:end]
+        text = raw_text.strip()
         if not _looks_like_procedure(text):
             continue
         sections.append(
@@ -126,6 +131,9 @@ def _find_sections(pages: list[HMMPage]) -> list[_Section]:
                 page_start=_page_for_offset(start, page_offsets),
                 page_end=_page_for_offset(max(start, end - 1), page_offsets),
                 text=text,
+                raw_text=raw_text,
+                start_offset=start,
+                page_offsets=page_offsets,
             )
         )
     return sections
@@ -169,11 +177,45 @@ def _is_prerequisite_list_item(text: str, start: int) -> bool:
     return "following frus" in previous_line or "remove these frus" in previous_line
 
 
-def _extract_steps(text: str) -> list[str]:
-    lines = [_clean_name(line) for line in text.splitlines()]
+def _extract_steps(section: _Section) -> list[str]:
+    return [step.text for step in _extract_step_records_from_section(section)]
+
+
+def _extract_step_records(manual: ManualMetadata, section: _Section) -> list[FRUStepRecord]:
+    steps = _extract_step_records_from_section(section)
+    records: list[FRUStepRecord] = []
+    for index, step in enumerate(steps, start=1):
+        citation = Citation(
+            manual_id=manual.manual_id,
+            source_url=manual.source_url,
+            page_start=step.page,
+            page_end=step.page,
+            section=f"{section.fru_id} {section.fru_name}",
+            section_id=section.fru_id,
+        )
+        records.append(
+            FRUStepRecord(
+                step_index=index,
+                text=step.text,
+                citation=citation,
+                citation_source="text_offset",
+            )
+        )
+    return records
+
+
+@dataclass(frozen=True)
+class _ExtractedStep:
+    text: str
+    page: int
+
+
+def _extract_step_records_from_section(section: _Section) -> list[_ExtractedStep]:
     steps: list[str] = []
+    step_pages: list[int] = []
     in_steps = False
-    for line in lines:
+    for match in re.finditer(r"[^\n]+", section.raw_text):
+        line = _clean_name(match.group(0))
         lowered = line.lower()
         if "removal steps" in lowered:
             in_steps = True
@@ -182,10 +224,17 @@ def _extract_steps(text: str) -> list[str]:
             continue
         if not line or _FRU_HEADING_RE.match(line):
             continue
+        if lowered.startswith("[[page "):
+            continue
         if lowered.startswith(("before removing", "before you remove", "remove the following")):
             continue
         steps.append(line)
-    return steps[:50]
+        absolute_offset = section.start_offset + match.start()
+        step_pages.append(_page_for_offset(absolute_offset, section.page_offsets))
+    return [
+        _ExtractedStep(text=text, page=page)
+        for text, page in zip(steps[:50], step_pages[:50], strict=False)
+    ]
 
 
 def _clean_name(value: str) -> str:

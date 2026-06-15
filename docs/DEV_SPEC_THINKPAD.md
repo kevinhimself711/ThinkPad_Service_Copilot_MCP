@@ -766,3 +766,31 @@ M9 gate:
 - The generated 120-case fixture remains useful as regression coverage.
 - The human gold fixture has priority for M9 readiness.
 - Full M9 packaging may proceed after M8.4c, but raw LLM-only repair planning must not be the default demo path. M9 should present deterministic validation and evidence-grounded fallback as the user-facing behavior while reporting raw live LLM strict metrics separately.
+
+## 22. M8.5 Step-Level Citation Contract
+
+M8.5 exists because M8.4 still used procedure-level FRU citations for every generated repair step. That made per-step page scoring logically stricter in code but weak in practice, because all steps shared the same page range.
+
+M8.5a behavior contract:
+
+- `FRUProcedure` keeps the existing `steps` list and adds `step_records`.
+- Each `step_record` stores `step_index`, short step text, `citation`, and `citation_source`.
+- `fru_extractor` maps step lines to pages through page offsets from local HMM text extraction.
+- `get_fru_procedure` returns `step_records` when available.
+- The agent uses step-level citations for FRU action steps before falling back to procedure-level citation.
+- `procedure_level_citation_fallback_rate` records when fallback still occurs.
+
+M8.5 evaluator contract:
+
+- Existing `expected.pages` remains a case-level citation constraint.
+- Optional `expected.step_pages` records step-index-specific human verified pages.
+- `step_page_accuracy` measures whether each expected FRU action step cites the human verified page.
+- `step_page_coverage` measures whether each expected FRU action step has any minimum citation.
+- `step_page_discriminability_cases` marks cases whose expected step pages span multiple pages.
+
+M8.5a review workflow:
+
+- `scripts/thinkpad_prepare_step_citation_review.py` writes ignored local review artifacts under `data/eval/`.
+- The review pack is not a committed fixture.
+- Human review must mark true pages only. Synthetic adversarial tests cover intentionally wrong pages.
+- M8.5b may finalize a committed fixture only after all accepted cases are reviewed.

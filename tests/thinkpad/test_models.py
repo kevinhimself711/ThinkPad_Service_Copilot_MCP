@@ -9,6 +9,7 @@ from src.thinkpad.models import (
     ExtractionResult,
     FigureRecord,
     FRUProcedure,
+    FRUStepRecord,
     HMMPage,
     TableRecord,
     WarningRecord,
@@ -121,6 +122,14 @@ def test_figure_warning_procedure_and_dependency_records_serialize():
         fru_name="Base cover assembly",
         citation=_citation(),
         steps=["Remove screws.", "Lift the base cover."],
+        step_records=[
+            FRUStepRecord(
+                step_index=1,
+                text="Remove screws.",
+                citation=_citation(),
+                citation_source="text_offset",
+            )
+        ],
         prerequisites=[],
         warnings=[warning],
         related_image_ids=[figure.image_id],
@@ -135,5 +144,6 @@ def test_figure_warning_procedure_and_dependency_records_serialize():
     )
 
     assert procedure.to_dict()["warnings"][0]["warning_level"] == "DANGER"
+    assert procedure.to_dict()["step_records"][0]["citation"]["page_start"] == 68
     assert edge.to_dict()["relation_type"] == "FRU_REQUIRES_PREREQUISITE_FRU"
     json.dumps(figure.to_dict())

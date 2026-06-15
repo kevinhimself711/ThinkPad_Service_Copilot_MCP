@@ -46,6 +46,8 @@ class ThinkPadAgentGoldenCase:
         for key in ("required_tools", "manual_ids", "record_types", "identifiers"):
             if key in expected and not isinstance(expected[key], list):
                 raise ValueError(f"{case_id}: expected.{key} must be a list")
+        if "step_pages" in expected and not isinstance(expected["step_pages"], list):
+            raise ValueError(f"{case_id}: expected.step_pages must be a list")
         return cls(case_id=case_id, category=category, query=query, expected=dict(expected))
 
     def to_dict(self) -> dict[str, Any]:
@@ -258,6 +260,9 @@ def _score_agent_response(
         "provider_clean_rate": 0.0 if bool(result.validation.get("provider_error")) else 1.0,
         "unsupported_claim_rate": 1.0 if int(result.validation.get("unsupported_claim_count") or 0) > int(expected.get("max_unsupported_claims", 0)) else 0.0,
         "retrieval_fallback_rate": 1.0 if _has_retrieval_fallback(result) else 0.0,
+        "procedure_level_citation_fallback_rate": float(
+            result.validation.get("procedure_level_citation_fallback_rate") or 0.0
+        ),
     }
     if metrics["final_plan_status_accuracy"] == 0.0:
         failure_reasons.append(f"status expected {expected_status}, got {actual_status}")
@@ -299,6 +304,7 @@ def _score_agent_response(
         expected_manual_ids = _string_set(expected.get("manual_ids"))
         expected_pages = _int_set(expected.get("pages"))
         expected_record_types = _string_set(expected.get("record_types"))
+        expected_step_pages = _step_page_expectations(expected.get("step_pages"))
         metrics["per_step_citation_validity"] = _per_step_citation_validity(
             result=result,
             expected_manual_ids=expected_manual_ids,
@@ -312,7 +318,14 @@ def _score_agent_response(
             expected_manual_ids=expected_manual_ids,
             expected_pages=expected_pages,
             expected_record_types=expected_record_types,
+            expected_step_pages=expected_step_pages,
         )
+        if expected_step_pages:
+            metrics["step_page_accuracy"] = _step_page_accuracy(result, expected_step_pages)
+            metrics["step_page_coverage"] = _step_page_coverage(result, expected_step_pages)
+            metrics["step_page_discriminability_cases"] = (
+                1.0 if _has_step_page_discriminability(expected_step_pages) else 0.0
+            )
         metrics["strict_citation_accuracy"] = 1.0 if (
             metrics["per_step_citation_validity"] == 1.0
             and metrics["required_evidence_coverage"] == 1.0
@@ -327,6 +340,8 @@ def _score_agent_response(
             failure_reasons.append("required record type coverage missing")
         if strict_citation and metrics["required_evidence_coverage"] < 1.0:
             failure_reasons.append("required citation manual/page/record coverage missing")
+        if strict_citation and expected_step_pages and metrics.get("step_page_accuracy", 1.0) < 1.0:
+            failure_reasons.append("step-level page coverage missing")
 
     expected_record_types = _string_set(expected.get("record_types"))
     if expected_record_types:
@@ -503,6 +518,7 @@ def _required_evidence_coverage(
     expected_manual_ids: set[str],
     expected_pages: set[int],
     expected_record_types: set[str],
+    expected_step_pages: dict[int, set[int]] | None = None,
 ) -> float:
     checks: list[float] = []
     if expected_manual_ids:
@@ -511,12 +527,73 @@ def _required_evidence_coverage(
             for citation in result.citations
         ) else 0.0)
     if expected_pages:
-        checks.append(_per_step_page_coverage(result, expected_pages))
+        if expected_step_pages:
+            checks.append(_step_page_accuracy(result, expected_step_pages))
+        else:
+            checks.append(_per_step_page_coverage(result, expected_pages))
     if expected_record_types:
         checks.append(_required_record_type_coverage(result, expected_record_types))
     if not checks:
         return 1.0 if _has_minimum_citation(result.citations) else 0.0
     return sum(checks) / len(checks)
+
+
+def _step_page_expectations(value: Any) -> dict[int, set[int]]:
+    if not isinstance(value, list):
+        return {}
+    expectations: dict[int, set[int]] = {}
+    for item in value:
+        if not isinstance(item, dict):
+            continue
+        raw_index = item.get("step_index", item.get("index"))
+        try:
+            step_index = int(raw_index)
+        except (TypeError, ValueError):
+            continue
+        pages = _int_set(item.get("pages"))
+        single_page = item.get("page")
+        if single_page is not None:
+            pages.update(_int_set([single_page]))
+        if step_index >= 1 and pages:
+            expectations[step_index] = pages
+    return expectations
+
+
+def _step_page_accuracy(result: RepairPlanResult, expected_step_pages: dict[int, set[int]]) -> float:
+    if not expected_step_pages:
+        return 1.0
+    action_steps = _fru_procedure_action_steps(result)
+    hits = 0
+    for step_index, expected_pages in expected_step_pages.items():
+        step = action_steps[step_index - 1] if step_index - 1 < len(action_steps) else None
+        if step and any(_citation_matches_page(citation, expected_pages) for citation in step.citations):
+            hits += 1
+    return hits / len(expected_step_pages)
+
+
+def _step_page_coverage(result: RepairPlanResult, expected_step_pages: dict[int, set[int]]) -> float:
+    if not expected_step_pages:
+        return 1.0
+    action_steps = _fru_procedure_action_steps(result)
+    covered = 0
+    for step_index in expected_step_pages:
+        step = action_steps[step_index - 1] if step_index - 1 < len(action_steps) else None
+        if step and _has_minimum_citation(step.citations):
+            covered += 1
+    return covered / len(expected_step_pages)
+
+
+def _fru_procedure_action_steps(result: RepairPlanResult) -> list[Any]:
+    return [
+        step for step in result.repair_plan
+        if str(step.evidence_type or "").lower() == "fru_procedure"
+        and str(step.title or "").lower().startswith("follow fru")
+    ]
+
+
+def _has_step_page_discriminability(expected_step_pages: dict[int, set[int]]) -> bool:
+    pages = {page for page_set in expected_step_pages.values() for page in page_set}
+    return len(expected_step_pages) >= 2 and len(pages) >= 2
 
 
 def _per_step_page_coverage(result: RepairPlanResult, expected_pages: set[int]) -> float:

@@ -73,6 +73,20 @@ def _service() -> ThinkPadToolService:
                 "fru_id": "1010",
                 "fru_name": "Base cover assembly",
                 "steps": ["Remove the base cover screws.", "Lift the base cover."],
+                "step_records": [
+                    {
+                        "step_index": 1,
+                        "text": "Remove the base cover screws.",
+                        "citation": _citation(67, "1010"),
+                        "citation_source": "text_offset",
+                    },
+                    {
+                        "step_index": 2,
+                        "text": "Lift the base cover.",
+                        "citation": _citation(68, "1010"),
+                        "citation_source": "text_offset",
+                    },
+                ],
                 "prerequisites": [],
                 "warnings": [],
                 "related_image_ids": ["fig_base"],
@@ -84,6 +98,26 @@ def _service() -> ThinkPadToolService:
                 "fru_id": "1050",
                 "fru_name": "Built-in battery",
                 "steps": ["Disable the built-in battery.", "Remove the base cover.", "Remove the battery screws."],
+                "step_records": [
+                    {
+                        "step_index": 1,
+                        "text": "Disable the built-in battery.",
+                        "citation": _citation(70, "1050"),
+                        "citation_source": "text_offset",
+                    },
+                    {
+                        "step_index": 2,
+                        "text": "Remove the base cover.",
+                        "citation": _citation(70, "1050"),
+                        "citation_source": "text_offset",
+                    },
+                    {
+                        "step_index": 3,
+                        "text": "Remove the battery screws.",
+                        "citation": _citation(71, "1050"),
+                        "citation_source": "text_offset",
+                    },
+                ],
                 "prerequisites": ["1010"],
                 "warnings": [],
                 "related_image_ids": ["fig_battery"],
@@ -202,6 +236,8 @@ def test_get_fru_procedure_requires_unambiguous_model() -> None:
     assert exact["status"] == "ok"
     assert exact["results"][0]["fru_id"] == "1050"
     assert exact["results"][0]["prerequisites"] == ["1010"]
+    assert exact["results"][0]["step_records"][2]["citation"]["page_start"] == 71
+    assert exact["results"][0]["step_records"][2]["citation_source"] == "text_offset"
 
 
 def test_get_fru_dependency_chain_returns_cited_graph_evidence() -> None:
