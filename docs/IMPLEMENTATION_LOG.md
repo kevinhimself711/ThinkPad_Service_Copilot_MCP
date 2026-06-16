@@ -1529,3 +1529,74 @@ M8.4c closes the original M8.4 gate. M9 can proceed as packaging and interview r
 ### Handoff
 
 Next action is human annotation of `data/eval/m8_5_step_citation_review.md`. M8.5b should finalize only verified/corrected step annotations into a committed fixture, then run deterministic, live retrieval, and raw live LLM strict baselines.
+
+---
+
+## M8.5 Outcome: Declared Failed (premise invalid)
+
+- Date: 2026-06-16
+- User goal: Finalize step-level citation human gold (M8.5b).
+- Result: FAILED — not an execution failure but an invalid premise. Human PDF
+  review found that HMM removal steps are overwhelmingly in figures, not text.
+  A read-only typology over all 8 manuals (215 body removal sections) found
+  IMAGE_ONLY ~90%, INTERLEAVED ~9%, TEXT_ONLY 0%. A text "step -> page" gold is
+  therefore not viable. The `step_kind` classifier was kept as salvage; the
+  step-gold fixture, finalize script, and step-gold live baselines were dropped.
+  See `docs/M8_6_PRESENTATION_TYPOLOGY.md`.
+
+---
+
+## M8.6: Image-Only Procedure Correctness (Foundational)
+
+- Date: 2026-06-16
+- User goal: Make all step-producing query types return correct steps. For the
+  90% image_only case "correct" = return the removal diagram + screw rows + an
+  explicit no-textual-steps signal, never fabricate steps from unrelated prose.
+- Scope included: presentation_type classification; figure->FRU attribution;
+  variant sub-procedure splitting; runtime stops fabricating image_only steps;
+  interleaved dropped-step fix; warning false-positive gate; table parent fix.
+- Scope excluded: LLM-reads-image step reconstruction (deferred to M8.7, qwen-vl);
+  writing figure image bytes; installation / password / BIOS procedures.
+
+### File-Level Changes
+
+| Change | Path | Implementation Fact |
+|---|---|---|
+| Modified | `src/thinkpad/models.py` | Added `_PRESENTATION_TYPES` and `FRUProcedure.presentation_type` (default text_only, validated). |
+| Modified | `src/thinkpad/fru_extractor.py` | Per-page figure signal into `_Section.has_figure`; `_classify_presentation`; variant split (`_split_variant_sections`, `_VARIANT_HEADER_RE`) with procedure_id suffix; figure attribution (`attribute_figures_to_procedures`); non-removal-context guard in `_classify_step_kind` (X-Rite/BIOS); added removal-action start verbs (put/push/place/...) to fix interleaved dropped steps. |
+| Modified | `src/thinkpad/extraction.py` | Call `attribute_figures_to_procedures` after figure extraction. |
+| Modified | `src/thinkpad/tool_service.py` | `_step_records_for` preserves `step_kind`; `_fru_result` adds `presentation_type`/`steps_in_diagram`/`figures`/`screw_rows` and emits only removal_step records; `_screw_rows_by_fru`; `get_fru_procedure` passes figure + screw lookups. |
+| Modified | `src/thinkpad/agent.py` | `_procedure_plan_action_records` keeps only removal_step and does not fabricate for image_only/cross_ref; `_build_structured_plan` emits a "Refer to cited removal diagram" step for image_only. |
+| Modified | `src/thinkpad/safety.py` | Real-trigger gate (`_is_real_warning`) before emitting WarningRecord; bare battery/system-board prose rejected. |
+| Modified | `src/thinkpad/table_extractor.py` | `_find_parent_section_for_table` attributes a table to the nearest preceding FRU heading (first-heading fallback). |
+| Added | `scripts/thinkpad_presentation_typology.py` | Read-only corpus typology tool. |
+| Modified | `tests/thinkpad/test_fru_extractor.py` | presentation_type (image_only/interleaved/cross_ref), software-step guard, variant split + non-variant guard, interleaved-across-pages dropped-step regression. |
+| Modified | `tests/thinkpad/test_figure_extractor.py` | Figure->FRU attribution by page span (narrowest-span tiebreak). |
+| Modified | `tests/thinkpad/test_tool_service.py` | image_only returns figure + screw_rows, suppresses fabricated steps. |
+| Modified | `tests/thinkpad/test_agent.py` | image_only plan refers to diagram, no X-Rite step. |
+| Modified | `tests/thinkpad/test_safety.py` | bare-prose no warning; caution-imperative battery warning. |
+| Modified | `tests/thinkpad/test_table_extractor.py` | multi-FRU page table attributes to preceding heading. |
+| Modified | `docs/M8_6_PRESENTATION_TYPOLOGY.md`, `docs/POST_M8_5_IMAGE_TEXT_DEFECTS.md` | Typology + defect resolution recorded. |
+
+### Scripts And Commands
+
+| Script/Command | Purpose | Result |
+|---|---|---|
+| `python scripts/thinkpad_extract_hmm.py` | Regenerate ignored `data/extracted/m3` with M8.6 logic. | 8/8 manuals; 213 procedures (image_only 194 / interleaved 11 / cross_ref 6 / text_only 2); 35 variant-split; 975/1285 figures attributed; warnings 679 -> 299 (60 DANGER preserved). |
+| `python -m pytest tests/thinkpad -q -m "not llm"` | Domain suite. | 129 passed. |
+| `python scripts/thinkpad_agent_evaluate.py --golden-set tests/fixtures/thinkpad_m8_2_reality_golden_set.json --mode deterministic --strict-citation` | 120-case regression. | 0 failed; all contract metrics 1.0. |
+| `python scripts/thinkpad_agent_evaluate.py --golden-set tests/fixtures/thinkpad_m8_4_human_gold_set.json --mode deterministic --strict-citation` | Human-gold regression. | 18 cases, 0 failed. |
+
+### Deviations And Risks
+
+- ruff/mypy are not installed in this environment; changed files pass `py_compile`. Lint/type-check not run.
+- Figure attribution depends on procedure page spans; 310 figures on non-procedure pages (intro/TOC/reference) remain unattributed by design.
+- The 1.0 deterministic results are contract-fixture results, not open-world accuracy. For the image_only majority, acceptance is "correct diagram returned + no fabricated steps", not textual step matching.
+- `_VECTOR_FIGURE_THRESHOLD` (40) distinguishes line-art pages from rule/border noise; raster manuals (t14_gen3) rely on embedded_image_count instead.
+
+### Handoff
+
+M8.7 should add a DashScope qwen-vl vision provider and a figure image-writing
+path, then reconstruct textual removal steps from image_only diagrams, marked
+unverified per AGENTS.md 6.4 / 18. The figure->FRU attribution from M8.6 is the
+prerequisite and is already in place.

@@ -803,3 +803,42 @@ New evaluator metrics are available for M8.5b:
 ### Decision
 
 M8.5a reaches the annotation gate. The next step is human review of `data/eval/m8_5_step_citation_review.md`. M8.5b should only start after reviewed step pages are available.
+
+## M8.5 Failed / M8.6 Image-Only Procedure Correctness
+
+Date: 2026-06-16
+
+### M8.5 outcome
+
+M8.5 (step-level citation human gold) was declared FAILED on an invalid premise:
+human PDF review showed HMM removal steps are overwhelmingly in figures, not text.
+A read-only typology over all 8 manuals (215 body removal sections) found
+IMAGE_ONLY ~90%, INTERLEAVED ~9%, TEXT_ONLY 0%, so a text "step -> page" gold is
+not viable. `step_kind` was kept; step-gold artifacts were dropped. See
+`docs/M8_6_PRESENTATION_TYPOLOGY.md`.
+
+### M8.6 regression results (deterministic strict)
+
+| Run | Cases | Failed | strict_citation_accuracy | required_tool_coverage | trajectory_tool_sequence_accuracy |
+|---|---:|---:|---:|---:|---:|
+| 120-case reality set | 120 | 0 | 1.0000 | 1.0000 | 1.0000 |
+| M8.4 human gold | 18 | 0 | 1.0000 | 1.0000 | 1.0000 |
+
+The schema changes (presentation_type, figures/screw_rows in get_fru_procedure,
+variant split, step_kind filtering, warning gate, table parent fix) did not
+regress the committed golden sets. Dependency-chain trajectories are unaffected.
+
+These 1.0 figures are contract-fixture results over defined fixtures, not
+open-world repair accuracy. For the 90% image_only majority, the M8.6 acceptance
+criterion is "the correct removal diagram + screw rows are returned and no steps
+are fabricated", verified by construction and unit tests rather than textual
+step matching. Textual step reconstruction from diagrams is deferred to M8.7
+(qwen-vl), which depends on the M8.6 figure attribution.
+
+### Decision
+
+M8.6 makes the foundational procedure path correct (no fabricated steps for
+image_only; interleaved steps no longer dropped; warnings/tables de-noised). Live
+LLM baselines were not re-run in M8.6 because the change is deterministic
+extraction/runtime correctness; they belong to M8.7 once vision step
+reconstruction exists.
