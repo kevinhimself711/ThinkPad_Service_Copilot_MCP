@@ -8,7 +8,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from src.thinkpad.figure_extractor import extract_figure_records
-from src.thinkpad.fru_extractor import extract_fru_procedures
+from src.thinkpad.fru_extractor import attribute_figures_to_procedures, extract_fru_procedures
 from src.thinkpad.hmm_loader import load_hmm_pages
 from src.thinkpad.manifest import ManualMetadata
 from src.thinkpad.models import ExtractionResult
@@ -42,6 +42,7 @@ def extract_manual_artifacts(
         output_dir=Path(options.output_dir) / "images",
         write_images=options.write_images,
     )
+    figures, fru_procedures = attribute_figures_to_procedures(figures, fru_procedures)
     return ExtractionResult(
         manual_id=manual.manual_id,
         page_count=len(pages),

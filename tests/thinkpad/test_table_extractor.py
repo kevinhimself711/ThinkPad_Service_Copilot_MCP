@@ -59,3 +59,35 @@ def test_extract_table_records_handles_markdown_fixture_tables():
     assert records[0].table_type == "error_code"
     assert records[0].row["Error code"] == "0271"
     assert records[0].row["Action"] == "Run setup"
+
+
+def test_table_attributed_to_nearest_preceding_fru_heading():
+    """On a page with several FRU sections, a screw table must attribute to the
+    FRU it sits under, not the last heading on the page.
+    """
+
+    page = HMMPage(
+        manual_id="thinkpad_t14_gen2_p14s_gen2_hmm",
+        page=72,
+        text=(
+            "1060 Wireless WAN card\n"
+            "Removal steps of the wireless WAN card\n"
+            "WWAN-SCREW-ANCHOR M2 x 2.5 mm 0.18 Nm\n"
+            "1070 Wireless LAN card\n"
+            "Removal steps of the wireless LAN card\n"
+            "1080 Audio board\n"
+        ),
+        source_url="https://download.lenovo.com/pccbbs/mobiles_pdf/t14_gen2_p14s_gen2_hmm_en.pdf",
+        table_blocks=[
+            [
+                ["Step", "Screw", "Torque"],
+                ["WWAN-SCREW-ANCHOR", "M2 x 2.5 mm", "0.18 Nm"],
+            ]
+        ],
+    )
+
+    records = extract_table_records(_manual(), [page])
+
+    assert len(records) == 1
+    # The table's anchor sits under 1060, not the last heading (1080).
+    assert records[0].parent_section == "1060 Wireless WAN card"

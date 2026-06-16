@@ -284,7 +284,16 @@ class ThinkPadToolService:
             and _contains_text(_record_text(record), query)
         ]
         candidates.sort(key=lambda record: _fru_rank(record, query))
-        results = [_fru_result(record) for record in candidates[:top_k]]
+        figures_by_id: dict[str, dict[str, Any]] = {
+            str(figure["image_id"]): _figure_result(figure)
+            for figure in self.figures
+            if figure.get("image_id")
+        }
+        screw_rows_by_fru = _screw_rows_by_fru(self.tables)
+        results = [
+            _fru_result(record, figures_by_id, screw_rows_by_fru)
+            for record in candidates[:top_k]
+        ]
         return _lookup_response(
             tool="get_fru_procedure",
             results=results,
@@ -579,18 +588,70 @@ def _table_result(record: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def _fru_result(record: dict[str, Any]) -> dict[str, Any]:
+def _screw_rows_by_fru(tables: list[dict[str, Any]]) -> dict[str, list[dict[str, Any]]]:
+    """Group screw/torque table rows by their parent FRU id.
+
+    For image-only procedures the only reliable structured truth is the
+    screw/torque spec table, so callers can surface exact specs alongside the
+    removal diagram instead of fabricated steps.
+    """
+
+    by_fru: dict[str, list[dict[str, Any]]] = {}
+    for table in tables:
+        columns = " ".join(str(c) for c in (table.get("columns") or [])).lower()
+        if "torque" not in columns and "screw" not in columns:
+            continue
+        section_id = str(table.get("parent_section") or "").split(" ", 1)[0]
+        if not section_id.isdigit():
+            continue
+        by_fru.setdefault(section_id, []).append(
+            {
+                "record_id": table.get("record_id"),
+                "row": table.get("row") or {},
+                "page": table.get("page"),
+                "citation": _citation_for(table),
+            }
+        )
+    return by_fru
+
+
+def _fru_result(
+    record: dict[str, Any],
+    figures_by_id: dict[str, dict[str, Any]] | None = None,
+    screw_rows_by_fru: dict[str, list[dict[str, Any]]] | None = None,
+) -> dict[str, Any]:
+    presentation_type = record.get("presentation_type") or "text_only"
+    steps_in_diagram = presentation_type in {"image_only", "cross_ref"}
+    related_image_ids = record.get("related_image_ids") or []
+    figures: list[dict[str, Any]] = []
+    if figures_by_id:
+        figures = [figures_by_id[i] for i in related_image_ids if i in figures_by_id]
+    screw_rows: list[dict[str, Any]] = []
+    if screw_rows_by_fru:
+        screw_rows = screw_rows_by_fru.get(str(record.get("fru_id") or ""), [])
+    # For image-only / cross-reference procedures the removal steps live in the
+    # diagram. Do not surface fabricated text steps (AGENTS.md section 6.4); only
+    # genuine removal_step records (interleaved/text procedures) are returned.
+    step_records = [
+        step for step in _step_records_for(record)
+        if step.get("step_kind") == "removal_step"
+    ]
+    text_steps = [step["text"] for step in step_records] if steps_in_diagram else (record.get("steps") or [])
     return {
         "procedure_id": record.get("procedure_id"),
         "manual_id": record.get("manual_id"),
         "record_type": "fru_procedure",
         "fru_id": record.get("fru_id"),
         "fru_name": record.get("fru_name"),
-        "steps": record.get("steps") or [],
-        "step_records": _step_records_for(record),
+        "presentation_type": presentation_type,
+        "steps_in_diagram": steps_in_diagram,
+        "steps": text_steps,
+        "step_records": step_records,
         "prerequisites": record.get("prerequisites") or [],
         "warnings": record.get("warnings") or [],
-        "related_image_ids": record.get("related_image_ids") or [],
+        "related_image_ids": related_image_ids,
+        "figures": figures,
+        "screw_rows": screw_rows,
         "citation": _citation_for(record),
     }
 
@@ -613,6 +674,7 @@ def _step_records_for(record: dict[str, Any]) -> list[dict[str, Any]]:
                 "text": text,
                 "citation": _citation_for({**record, "citation": citation}),
                 "citation_source": item.get("citation_source") or "unknown",
+                "step_kind": item.get("step_kind") or "removal_step",
             }
         )
     return normalized

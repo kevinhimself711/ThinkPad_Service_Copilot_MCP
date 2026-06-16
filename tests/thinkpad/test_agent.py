@@ -60,6 +60,57 @@ def test_agent_machine_type_plan_calls_expected_tools_and_cites() -> None:
     assert result.validation["procedure_level_citation_fallback_rate"] == 0.0
 
 
+def test_agent_image_only_procedure_refers_to_diagram_not_fabricated_steps() -> None:
+    manual = _manual_gen10()
+    citation = _citation(manual.manual_id, 72, "1020")
+    service = ThinkPadToolService(
+        manuals=[manual],
+        fru_procedures=[
+            {
+                "procedure_id": "p1020",
+                "manual_id": manual.manual_id,
+                "fru_id": "1020",
+                "fru_name": "Built-in battery",
+                "citation": citation,
+                "page_start": 72,
+                "page_end": 73,
+                "presentation_type": "image_only",
+                "steps": ["Open the X-Rite Color Assistant app."],
+                "step_records": [
+                    {
+                        "step_index": 1,
+                        "text": "Open the X-Rite Color Assistant app.",
+                        "citation": citation,
+                        "citation_source": "text_offset",
+                        "step_kind": "other",
+                    }
+                ],
+                "prerequisites": [],
+                "related_image_ids": ["figure_battery"],
+            }
+        ],
+        figures=[
+            {
+                "image_id": "figure_battery",
+                "manual_id": manual.manual_id,
+                "page": 72,
+                "related_fru_id": "1020",
+                "caption": "Battery removal diagram",
+                "citation": citation,
+            }
+        ],
+    )
+
+    result = plan_thinkpad_repair("21CB built-in battery removal plan", service)
+
+    assert result.status == "ok"
+    actions = [step.action for step in result.repair_plan]
+    titles = [step.title for step in result.repair_plan]
+    # The X-Rite prose must never appear as a removal step.
+    assert all("X-Rite" not in action for action in actions)
+    # A diagram-referencing step must be emitted instead.
+    assert any(title.startswith("Refer to cited removal diagram") for title in titles)
+
 def test_agent_screw_query_uses_screw_lookup_without_procedure_tools() -> None:
     service = _service_with_records()
 

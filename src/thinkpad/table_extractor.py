@@ -16,7 +16,6 @@ def extract_table_records(manual: ManualMetadata, pages: list[HMMPage]) -> list[
 
     records: list[TableRecord] = []
     for page in pages:
-        parent_section = _find_parent_section(page.text)
         table_blocks = list(page.table_blocks)
         table_blocks.extend(_parse_markdown_tables(page.text))
 
@@ -27,6 +26,7 @@ def extract_table_records(manual: ManualMetadata, pages: list[HMMPage]) -> list[
 
             columns = _dedupe_columns(normalized_rows[0])
             table_type = classify_table_text(_table_text(normalized_rows))
+            parent_section = _find_parent_section_for_table(page.text, normalized_rows)
             citation = Citation(
                 manual_id=manual.manual_id,
                 source_url=manual.source_url,
@@ -110,13 +110,41 @@ def _parse_markdown_tables(text: str) -> list[list[list[str]]]:
     return tables
 
 
-def _find_parent_section(text: str) -> str | None:
+def _find_parent_section_for_table(text: str, rows: list[list[str]]) -> str | None:
+    """Attribute a table to the nearest FRU heading that PRECEDES it.
+
+    A page can carry several FRU sections (e.g. 1060 / 1070 / 1080 plus their
+    screw tables). Taking the last heading on the page mis-attributes an earlier
+    FRU's screw/torque table to a later FRU. We locate the table in the page
+    text by its first non-empty cell and pick the closest heading at or before
+    that offset. When the table cannot be located, fall back to the FIRST
+    heading on the page (not the last), which is the safer default.
+    """
+
     matches = list(_FRU_HEADING_RE.finditer(text))
     if not matches:
         return None
-    match = matches[-1]
-    name = re.sub(r"\s+", " ", match.group("name")).strip()
-    return f"{match.group('fru_id')} {name}"
+
+    anchor = _table_anchor_offset(text, rows)
+    chosen = matches[0]
+    if anchor is not None:
+        preceding = [m for m in matches if m.start() <= anchor]
+        if preceding:
+            chosen = preceding[-1]
+    name = re.sub(r"\s+", " ", chosen.group("name")).strip()
+    return f"{chosen.group('fru_id')} {name}"
+
+
+def _table_anchor_offset(text: str, rows: list[list[str]]) -> int | None:
+    for row in rows:
+        for cell in row:
+            cell = cell.strip()
+            if len(cell) < 4:
+                continue
+            index = text.find(cell)
+            if index != -1:
+                return index
+    return None
 
 
 def _section_id(section: str | None) -> str | None:

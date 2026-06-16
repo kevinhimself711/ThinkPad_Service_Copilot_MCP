@@ -53,6 +53,28 @@ def test_render_step_review_markdown_explains_step_statuses(tmp_path: Path) -> N
     assert "Step status values" in rendered
     assert "Candidate page" in rendered
     assert "Verified page: ``" in rendered
+    assert "Label quality:" in rendered
+
+
+def test_step_label_quality_classification(tmp_path: Path) -> None:
+    module = _load_script()
+    pack = module.build_step_review_pack(
+        _write_manifest(tmp_path),
+        _write_extracted(tmp_path, include_step_records=True),
+        target_count=2,
+    )
+
+    valid = {"clean", "fragment", "suspect"}
+    for candidate in pack["candidates"]:
+        for step in candidate["candidate_steps"]:
+            assert step["label_quality"] in valid
+        clean_steps = [s for s in candidate["candidate_steps"] if s["label_quality"] == "clean"]
+        assert clean_steps, f"{candidate['case_id']} has no clean step"
+
+    assert module._label_quality("Disconnect the battery connector") == "clean"
+    assert module._label_quality("1. Enter the UEFI BIOS menu") == "clean"
+    assert module._label_quality("2a 2c 2d 2e") == "fragment"
+    assert module._label_quality("the following illustration") == "suspect"
 
 
 def test_build_step_review_pack_requires_step_records(tmp_path: Path) -> None:
@@ -119,6 +141,7 @@ def _write_extracted(tmp_path: Path, include_step_records: bool) -> Path:
                         "section_id": f"10{index}0",
                     },
                     "citation_source": "text_offset",
+                    "step_kind": "removal_step",
                 },
                 {
                     "step_index": 2,
@@ -131,6 +154,7 @@ def _write_extracted(tmp_path: Path, include_step_records: bool) -> Path:
                         "section_id": f"10{index}0",
                     },
                     "citation_source": "text_offset",
+                    "step_kind": "removal_step",
                 },
             ]
         procedures.append(record)

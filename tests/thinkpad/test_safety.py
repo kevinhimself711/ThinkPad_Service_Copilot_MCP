@@ -52,3 +52,42 @@ def test_extract_warning_records_ignores_toc_battery_mentions():
     warnings = extract_warning_records(_manual(), [page])
 
     assert warnings == []
+
+
+def test_bare_battery_prose_is_not_a_warning():
+    """A page that merely mentions 'battery' or 'system board' in ordinary
+    removal prose, with no DANGER/CAUTION/imperative trigger, must not emit a
+    warning (AGENTS.md 6.6 — no false-positive safety records).
+    """
+
+    page = HMMPage(
+        manual_id="thinkpad_e15_gen2_hmm",
+        page=72,
+        source_url="https://download.lenovo.com/pccbbs/mobiles_pdf/e15_hmm.pdf",
+        text=(
+            "Removal steps of the built-in battery\n"
+            "Disconnect the battery connector from the system board.\n"
+            "Remove the four screws and lift the battery out.\n"
+        ),
+    )
+
+    warnings = extract_warning_records(_manual(), [page])
+
+    assert warnings == []
+
+
+def test_caution_imperative_battery_is_a_warning():
+    page = HMMPage(
+        manual_id="thinkpad_e15_gen2_hmm",
+        page=64,
+        source_url="https://download.lenovo.com/pccbbs/mobiles_pdf/e15_hmm.pdf",
+        text=(
+            "CAUTION: The battery could explode if handled incorrectly. "
+            "Do not crush the battery."
+        ),
+    )
+
+    warnings = extract_warning_records(_manual(), [page])
+
+    assert any(w.warning_level == "CAUTION" for w in warnings)
+    assert any(w.related_component == "battery" for w in warnings)

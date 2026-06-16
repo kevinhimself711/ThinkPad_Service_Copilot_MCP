@@ -666,15 +666,34 @@ def _build_structured_plan(evidence: EvidenceBundle) -> list[RepairPlanStep]:
                     )
                 )
         else:
-            steps.append(
-                _step(
-                    len(steps) + 1,
-                    f"Use FRU procedure {item.get('fru_id') or ''}".strip(),
-                    f"Target FRU: {item.get('fru_name') or 'unknown component'}; follow the cited FRU procedure candidate.",
-                    "fru_procedure",
-                    [_citation_with_source(item.get("citation") or {}, "procedure_fallback")],
+            presentation_type = item.get("presentation_type") or "text_only"
+            related_image_ids = item.get("related_image_ids") or []
+            if presentation_type in {"image_only", "cross_ref"} and related_image_ids:
+                # Steps live in the removal diagram; point to the cited figure
+                # instead of fabricating text steps (AGENTS.md section 6.4).
+                image_ref = ", ".join(str(i) for i in related_image_ids[:3])
+                steps.append(
+                    _step(
+                        len(steps) + 1,
+                        f"Refer to cited removal diagram for FRU {item.get('fru_id') or ''}".strip(),
+                        f"Target FRU: {item.get('fru_name') or 'unknown component'}. "
+                        f"The removal steps for this FRU are shown in the cited diagram "
+                        f"({image_ref}); no separate textual removal steps are published. "
+                        f"Follow the exploded-view diagram and the cited screw/torque specifications.",
+                        "fru_procedure",
+                        [_citation_with_source(item.get("citation") or {}, "procedure_diagram")],
+                    )
                 )
-            )
+            else:
+                steps.append(
+                    _step(
+                        len(steps) + 1,
+                        f"Use FRU procedure {item.get('fru_id') or ''}".strip(),
+                        f"Target FRU: {item.get('fru_name') or 'unknown component'}; follow the cited FRU procedure candidate.",
+                        "fru_procedure",
+                        [_citation_with_source(item.get("citation") or {}, "procedure_fallback")],
+                    )
+                )
     if evidence.dependency_chain:
         item = evidence.dependency_chain[0]
         chain = item.get("dependency_chain") or []
@@ -755,6 +774,11 @@ def _procedure_plan_action_records(item: dict[str, Any]) -> list[dict[str, Any]]
         for raw in raw_step_records:
             if not isinstance(raw, dict):
                 continue
+            # Only genuine removal steps become plan actions. install_note,
+            # spec_table, warning, and other kinds must never be presented as
+            # removal steps (AGENTS.md section 6.4).
+            if raw.get("step_kind") not in (None, "removal_step"):
+                continue
             text = re.sub(r"\s+", " ", str(raw.get("text") or "")).strip()
             if _is_procedure_noise(text) or not _is_action_like_procedure_text(text):
                 continue
@@ -770,6 +794,12 @@ def _procedure_plan_action_records(item: dict[str, Any]) -> list[dict[str, Any]]
             )
     if records:
         return records
+
+    # Image-only / cross-reference procedures have no textual removal steps; the
+    # steps live in the diagram. Do not fabricate steps from unrelated section
+    # prose (the old `steps` fallback). Callers handle the diagram path.
+    if item.get("presentation_type") in {"image_only", "cross_ref"}:
+        return []
 
     fallback = _citation_with_source(item.get("citation") or {}, "procedure_fallback")
     return [

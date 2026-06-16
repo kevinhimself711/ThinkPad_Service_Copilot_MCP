@@ -240,6 +240,72 @@ def test_get_fru_procedure_requires_unambiguous_model() -> None:
     assert exact["results"][0]["step_records"][2]["citation_source"] == "text_offset"
 
 
+def test_get_fru_procedure_image_only_returns_figure_not_fabricated_steps() -> None:
+    """An image-only procedure must return the removal diagram + screw rows and
+    NOT fabricate steps from unrelated section prose (AGENTS.md 6.4)."""
+
+    service = ThinkPadToolService(
+        manuals=_manuals(),
+        tables=[
+            {
+                "record_id": "ssd_screw",
+                "manual_id": GEN9_MANUAL,
+                "page": 77,
+                "table_type": "screw_spec",
+                "columns": ["Step", "Screw", "Torque"],
+                "row": {"Step": "1", "Screw": "M2 x 2.5 mm", "Torque": "0.18 Nm"},
+                "parent_section": "1030 M.2 solid-state drive",
+                "citation": _citation(77, "1030"),
+            },
+        ],
+        fru_procedures=[
+            {
+                "procedure_id": "gen9_1030",
+                "manual_id": GEN9_MANUAL,
+                "fru_id": "1030",
+                "fru_name": "M.2 solid-state drive",
+                "presentation_type": "image_only",
+                "steps": ["Open the X-Rite Color Assistant app."],
+                "step_records": [
+                    {
+                        "step_index": 1,
+                        "text": "Open the X-Rite Color Assistant app.",
+                        "citation": _citation(77, "1030"),
+                        "citation_source": "text_offset",
+                        "step_kind": "other",
+                    },
+                ],
+                "prerequisites": [],
+                "warnings": [],
+                "related_image_ids": ["fig_ssd"],
+                "citation": _citation(77, "1030"),
+            },
+        ],
+        figures=[
+            {
+                "image_id": "fig_ssd",
+                "manual_id": GEN9_MANUAL,
+                "page": 77,
+                "record_type": "figure",
+                "related_fru_id": "1030",
+                "caption": "Removal diagram",
+                "citation": _citation(77, "1030"),
+            },
+        ],
+    )
+
+    result = service.get_fru_procedure("X1 Carbon Gen 9", "solid-state drive")
+    assert result["status"] == "ok"
+    proc = result["results"][0]
+    assert proc["presentation_type"] == "image_only"
+    assert proc["steps_in_diagram"] is True
+    assert proc["steps"] == []  # X-Rite prose not surfaced as steps
+    assert proc["step_records"] == []
+    assert [f["image_id"] for f in proc["figures"]] == ["fig_ssd"]
+    assert len(proc["screw_rows"]) == 1
+    assert proc["screw_rows"][0]["row"]["Torque"] == "0.18 Nm"
+
+
 def test_get_fru_dependency_chain_returns_cited_graph_evidence() -> None:
     response = _service().get_fru_dependency_chain("X1 Carbon Gen 9", "battery")
 

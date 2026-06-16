@@ -34,6 +34,37 @@ _DIAGNOSTIC_PROCEDURE_TERMS = (
     "diagnostic",
     "system will reboot",
 )
+_CLEAN_START_TERMS = (
+    "remove",
+    "disconnect",
+    "detach",
+    "lift",
+    "loosen",
+    "install",
+    "attach",
+    "connect",
+    "ensure",
+    "route",
+    "unplug",
+    "disable",
+    "slide",
+    "pull",
+    "open",
+    "turn",
+    "peel",
+    "grasp",
+    "press",
+    "apply",
+    "align",
+    "reconnect",
+    "replace",
+    "insert",
+    "pivot",
+    "note:",
+    "notes:",
+    "when installing:",
+    "attention:",
+)
 
 
 @dataclass(frozen=True)
@@ -197,23 +228,25 @@ def render_step_review_markdown(pack: dict[str, Any]) -> str:
                 f"- Required tools: `{item.get('required_tools') or []}`",
                 f"- PDF: `{item.get('pdf_local_path') or ''}`",
                 f"- Source record: `{item.get('source_record_kind') or ''}:{item.get('source_record_id') or ''}`",
-                "- Review status: `pending`",
-                "- Reviewer notes: ``",
+                f"- Review status: `{item.get('review_status') or 'pending'}`",
+                f"- Reviewer notes: `{item.get('reviewer_notes') or ''}`",
                 "",
                 "### Steps",
                 "",
             ]
         )
         for step in item.get("candidate_steps") or []:
+            verified_page = step.get("verified_page")
             lines.extend(
                 [
                     f"#### Step {step['step_index']}",
                     "",
                     f"- Step label: `{step['step_label']}`",
                     f"- Candidate page: `{step.get('candidate_page') or ''}`",
-                    "- Review status: `pending`",
-                    "- Verified page: ``",
-                    "- Reviewer notes: ``",
+                    f"- Label quality: `{step.get('label_quality') or 'unknown'}`",
+                    f"- Review status: `{step.get('review_status') or 'pending'}`",
+                    f"- Verified page: `{verified_page if verified_page is not None else ''}`",
+                    f"- Reviewer notes: `{step.get('reviewer_notes') or ''}`",
                     "",
                 ]
             )
@@ -306,10 +339,10 @@ def _candidate_steps(row: dict[str, Any]) -> list[dict[str, Any]]:
     for raw in raw_steps:
         if not isinstance(raw, dict):
             continue
+        if raw.get("step_kind") != "removal_step":
+            continue
         text = _short_label(raw.get("text") or "", _STEP_LABEL_LIMIT)
         if not text or _is_review_noise(text):
-            continue
-        if not _is_action_like_step_text(text):
             continue
         citation = raw.get("citation") if isinstance(raw.get("citation"), dict) else {}
         page = _to_int(citation.get("page_start"))
@@ -321,12 +354,37 @@ def _candidate_steps(row: dict[str, Any]) -> list[dict[str, Any]]:
                 "step_label": text,
                 "candidate_page": page,
                 "citation_source": raw.get("citation_source") or "unknown",
+                "step_kind": raw.get("step_kind"),
+                "label_quality": _label_quality(text),
                 "review_status": "pending",
                 "verified_page": None,
                 "reviewer_notes": "",
             }
         )
     return steps[:8]
+
+
+def _label_quality(text: str) -> str:
+    """Classify a candidate step label so reviewers can triage text quality.
+
+    `clean`    a self-contained instruction (numbered prefix or action verb start).
+    `fragment` likely a wrapped continuation or bullet/label residue (e.g. "2a 2c 2d").
+    `suspect`  contains an action term but does not start like a clean instruction.
+
+    This is a reviewer aid only; the human review status remains authoritative.
+    """
+
+    normalized = re.sub(r"\s+", " ", text).strip()
+    lowered = normalized.lower()
+    if re.match(r"^\d+\.", normalized) or lowered.startswith(_CLEAN_START_TERMS):
+        return "clean"
+    if (
+        len(normalized) < 15
+        or re.match(r"^\d*[a-z]\b", lowered)
+        or re.match(r"^(\d+[a-z]\s*)+", lowered)
+    ):
+        return "fragment"
+    return "suspect"
 
 
 def _is_service_procedure(row: dict[str, Any]) -> bool:
@@ -386,29 +444,6 @@ def _is_review_noise(text: str) -> bool:
     if normalized.startswith(("installation steps of", "removal steps of")):
         return True
     return False
-
-
-def _is_action_like_step_text(text: str) -> bool:
-    normalized = text.lower()
-    action_terms = (
-        "remove",
-        "disconnect",
-        "detach",
-        "lift",
-        "loosen",
-        "install",
-        "attach",
-        "connect",
-        "ensure",
-        "route",
-        "turn off",
-        "unplug",
-        "disable",
-        "slide",
-        "pull",
-        "open",
-    )
-    return any(term in normalized for term in action_terms)
 
 
 def _to_int(value: Any) -> int | None:

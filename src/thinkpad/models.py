@@ -10,6 +10,27 @@ class DomainModelError(ValueError):
     """Raised when a ThinkPad domain record violates required invariants."""
 
 
+_STEP_KINDS = frozenset(
+    {
+        "removal_step",
+        "install_note",
+        "spec_table",
+        "warning",
+        "image_only_marker",
+        "other",
+    }
+)
+
+_PRESENTATION_TYPES = frozenset(
+    {
+        "text_only",
+        "interleaved",
+        "image_only",
+        "cross_ref",
+    }
+)
+
+
 def _require_non_empty(value: str | None, field_name: str) -> None:
     if value is None or not str(value).strip():
         raise DomainModelError(f"{field_name} cannot be empty")
@@ -181,12 +202,15 @@ class FRUStepRecord:
     text: str
     citation: Citation
     citation_source: str = "text_offset"
+    step_kind: str = "removal_step"
 
     def __post_init__(self) -> None:
         if self.step_index < 1:
             raise DomainModelError("step_index must be >= 1")
         _require_non_empty(self.text, "text")
         _require_non_empty(self.citation_source, "citation_source")
+        if self.step_kind not in _STEP_KINDS:
+            raise DomainModelError(f"step_kind must be one of {sorted(_STEP_KINDS)}")
 
     def to_dict(self) -> dict[str, Any]:
         """Return a JSON-safe representation."""
@@ -210,6 +234,7 @@ class FRUProcedure:
     related_image_ids: list[str] = field(default_factory=list)
     page_start: int | None = None
     page_end: int | None = None
+    presentation_type: str = "text_only"
 
     def __post_init__(self) -> None:
         _require_non_empty(self.procedure_id, "procedure_id")
@@ -219,6 +244,10 @@ class FRUProcedure:
         _require_list(self.steps, "steps")
         _require_list(self.prerequisites, "prerequisites")
         _require_list(self.related_image_ids, "related_image_ids")
+        if self.presentation_type not in _PRESENTATION_TYPES:
+            raise DomainModelError(
+                f"presentation_type must be one of {sorted(_PRESENTATION_TYPES)}"
+            )
         if not isinstance(self.step_records, list) or not all(
             isinstance(item, FRUStepRecord) for item in self.step_records
         ):
