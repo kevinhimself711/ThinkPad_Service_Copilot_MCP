@@ -842,3 +842,51 @@ image_only; interleaved steps no longer dropped; warnings/tables de-noised). Liv
 LLM baselines were not re-run in M8.6 because the change is deterministic
 extraction/runtime correctness; they belong to M8.7 once vision step
 reconstruction exists.
+
+## M8.7 Vision Removal-Step Reconstruction (qwen-vl, bounded live)
+
+Date: 2026-06-17
+
+For image_only FRUs, M8.7 additively reconstructs UNVERIFIED removal action
+descriptions from the exploded-view diagram via DashScope qwen-vl-max. The
+authoritative path (figure + screw/torque table + steps_in_diagram) is unchanged;
+vision steps live in a separate `vision_steps` field marked
+`verified:false` / `qwen_vl_unverified`.
+
+Bounded live smoke (`scripts/thinkpad_vision_live_smoke.py 10`, 10 real component
+image_only FRUs):
+
+| Metric | Value |
+|---|---:|
+| Reconstructed (non-empty) | 10 / 10 |
+| Spec leaks (torque/screw/FRU id) | 0 |
+| Latency mean | 2.5 s |
+| Latency p95 | 2.9 s |
+
+Full-corpus live eval (`scripts/thinkpad_vision_live_eval.py`, ALL 171
+real-component image_only FRUs across 8 manuals; adds a figure-correctness check
+by asking qwen-vl to name the returned diagram's component):
+
+| Metric | Value |
+|---|---:|
+| Reconstruction non-empty | 171 / 171 (100%) |
+| Spec leaks | 0 |
+| **Figure correctness (returned image matches queried FRU)** | **130 / 171 (76%)** |
+| Latency reconstruct mean / p95 | 2.7 s / 3.9 s |
+
+Regression with vision OFF (default): 120-case deterministic strict = 0 failures,
+all contract metrics 1.0. Vision is disabled by default so deterministic baselines
+are unaffected.
+
+Honesty note: vision steps are PLAUSIBLE BUT UNVERIFIED — qwen-vl interprets the
+drawing and some details may be wrong. This is NOT open-world step accuracy; it is
+a clearly-labeled, non-authoritative aid. Exact specs always come from the cited
+screw/torque table, never the vision model (AGENTS.md §6.4 / §18).
+
+**Key finding:** end-to-end "correct steps for a query" is capped at **76%** by
+figure->FRU attribution precision, NOT by the vision layer (reconstruction is 100%
+non-empty, 0-leak). 41/171 FRUs return a neighbor FRU's diagram due to M8.6's
+page-span attribution being too coarse when adjacent FRUs share pages. An earlier
+4-FRU spot check (M8.7-001) suggested figures were correct; the full-corpus run
+corrects that to 76%. Improving figure attribution precision is the M8.8 target.
+The DASHSCOPE key used was exposed in chat and must be rotated.

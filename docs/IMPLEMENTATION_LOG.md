@@ -1600,3 +1600,72 @@ M8.7 should add a DashScope qwen-vl vision provider and a figure image-writing
 path, then reconstruct textual removal steps from image_only diagrams, marked
 unverified per AGENTS.md 6.4 / 18. The figure->FRU attribution from M8.6 is the
 prerequisite and is already in place.
+
+---
+
+## M8.7: Vision-Derived Removal Steps for image_only FRUs (qwen-vl)
+
+- Date: 2026-06-17
+- User goal: For image_only FRUs (≈90%; no textual steps in the manual), use
+  DashScope qwen-vl to reconstruct textual removal *action descriptions* from the
+  exploded-view diagram — ADDITIVE and marked UNVERIFIED. Figure + screw/torque
+  table stay authoritative (AGENTS.md 6.4 / 18).
+- Scope included: DashScope vision provider; on-demand in-memory diagram render;
+  vision reconstruction with spec-leak guard; persistent gitignored cache;
+  online per-query surfacing in get_fru_procedure + agent; bounded live test.
+- Scope excluded: pre-writing figure image files; vision for interleaved/text
+  procedures; treating vision steps as authoritative.
+- Decisions: online per-query (cache-bounded); additive `vision_steps` field;
+  qwen-vl-max; vision disabled by default in settings (baseline stays vision-free).
+
+### File-Level Changes
+
+| Change | Path | Implementation Fact |
+|---|---|---|
+| Added | `src/libs/llm/dashscope_vision_llm.py` | `DashScopeVisionLLM(OpenAIVisionLLM)`: DASHSCOPE_API_KEY + dashscope base_url, default model qwen-vl-max. |
+| Modified | `src/libs/llm/llm_factory.py` | Register "dashscope" vision provider. |
+| Modified | `config/settings.yaml` | vision_llm: provider dashscope, model qwen-vl-max, base_url, api_key "" (env-var only), enabled false. |
+| Added | `src/thinkpad/vision_steps.py` | In-memory page render, qwen-vl reconstruction (action-only prompt + spec-leak regex guard + step cap), gitignored JSONL cache (`get_or_reconstruct`). step_kind `vision_removal_step`, citation_source `qwen_vl_unverified`, verified false. |
+| Modified | `src/thinkpad/tool_service.py` | `__init__` vision_llm param (DI); `_attach_vision_steps` fills `vision_steps` for image_only only when vision enabled+configured; `_fru_result` adds `vision_steps: []`; authoritative removal_step filter unchanged. |
+| Modified | `src/thinkpad/agent.py` | image_only branch appends each vision step as an "UNVERIFIED (AI-read from diagram)" step after the "Refer to cited removal diagram" step; `_procedure_plan_action_records` unchanged (its filter excludes vision kind). |
+| Modified | `CLAUDE.md` | Live provider validation policy: run bounded live when useful (don't defer), cost-controlled, env-var key, record results. |
+| Added | `tests/thinkpad/test_vision_steps.py`, `tests/unit/test_dashscope_vision_llm.py` | Parsing/leak-guard, reconstruct failure/empty→[], cache hit/miss, provider key resolution + factory registration. |
+| Added (local, not committed) | `scripts/thinkpad_vision_live_smoke.py` | Bounded live smoke driver. |
+
+### Scripts And Commands
+
+| Script/Command | Purpose | Result |
+|---|---|---|
+| `python -m pytest tests/thinkpad -q -m "not llm"` | Domain suite. | 135 passed. |
+| `python scripts/thinkpad_agent_evaluate.py --golden-set tests/fixtures/thinkpad_m8_2_reality_golden_set.json --mode deterministic --strict-citation` | Regression with vision OFF. | 120 cases, 0 failed. |
+| `DASHSCOPE_API_KEY=*** python scripts/thinkpad_vision_live_smoke.py 10` | Bounded qwen-vl live smoke. | 10/10 reconstructed, 0 spec leaks, latency mean 2.5s / p95 2.9s. See EXPERIMENTS M8.7-001. |
+| `DASHSCOPE_API_KEY=*** python scripts/thinkpad_vision_live_eval.py` | Full-corpus live eval (171 image_only FRUs) + figure-correctness check. | reconstruction 171/171 non-empty, 0 spec leaks; figure correctness 130/171 (76%); latency 2.7s/p95 3.9s. See EXPERIMENTS M8.7-002. |
+
+### Deviations And Risks
+
+- ruff: all M8.7 files clean. mypy: 0 net new errors over baseline (86).
+- Vision steps are PLAUSIBLE BUT UNVERIFIED (qwen-vl interprets the drawing);
+  surfaced as vision_removal_step / qwen_vl_unverified / verified:false, never
+  authoritative; spec-leak guard rejects torque/screw-count/FRU-id.
+- Default `enabled: false` keeps deterministic baselines vision-free; the 120-case
+  result confirms no regression.
+- The unit-test suite under `tests/unit/` has ~79 pre-existing failures (upstream
+  framework: ragas/datasets/splitter/trace/timing), unrelated to M8.7; the two
+  new vision unit tests pass.
+
+### Handoff
+
+`DASHSCOPE_API_KEY` was exposed in chat and MUST be rotated in the Bailian
+console. To enable vision at runtime, set `vision_llm.enabled: true` and provide
+the key via env var. The agent eval driver does not yet inject the vision LLM into
+ThinkPadToolService; a future change can wire `--live-llm` runs to pass it for an
+end-to-end vision eval.
+
+**M8.8 target (found by the full-corpus eval):** end-to-end "correct steps for a
+query" is capped at 76% because M8.6's figure->FRU attribution
+(`attribute_figures_to_procedures`, page-span containment + narrowest-span
+tiebreak) mis-assigns 41/171 image_only FRUs to a neighbor FRU's diagram when
+adjacent FRUs share pages. The vision layer is sound (100% non-empty, 0 leaks);
+the bottleneck is attribution precision. M8.8 should use finer signal than page
+membership — e.g. the figure's vertical position vs the FRU heading offset within
+the page.

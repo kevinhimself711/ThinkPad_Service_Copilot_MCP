@@ -2132,3 +2132,99 @@ Result:
 | Focused ruff | Passed. |
 
 Decision: focused M8.5a behavior is covered before full regression.
+
+## M8.7-001: qwen-vl Vision Removal-Step Reconstruction (bounded live)
+
+Date: 2026-06-17
+
+Hypothesis: for image_only FRU procedures (no textual steps in the manual), a
+vision LLM can reconstruct usable removal *action descriptions* from the
+exploded-view diagram, additively and marked unverified, without leaking exact
+specs (torque / screw counts / FRU IDs) that AGENTS.md §18 forbids it from
+authoring.
+
+Setup: DashScope `qwen-vl-max` via the OpenAI-compatible endpoint
+(`DashScopeVisionLLM`). Bounded live sample of 10 real component image_only FRUs
+across the t14_gen2 manual (diagnostic pseudo-FRUs and >4-image sets excluded).
+Diagram pages rendered in-memory via pymupdf; key via `DASHSCOPE_API_KEY` env var
+only. Command: `python scripts/thinkpad_vision_live_smoke.py 10`.
+
+Results:
+
+| Metric | Value |
+|---|---|
+| Procedures reconstructed | 10 / 10 (0 empty) |
+| Spec leaks (torque/screw count/FRU id) | 0 |
+| Latency mean | 2.5 s |
+| Latency p95 | 2.9 s |
+
+Sample output (keyboard): "Insert the special tool… / Slide the tool to release…
+/ Lift the keyboard… / Pull the keyboard forward to disconnect". Steps are
+coherent and match exploded-view semantics.
+
+Interpretation: the prompt + post-parse spec-leak guard held — no step carried a
+torque value, screw size/count, or FRU id. Latency/cost are low (~2.5 s,
+single image per call), and the persistent gitignored cache makes repeat queries
+free. These steps are PLAUSIBLE BUT UNVERIFIED: qwen-vl interprets the drawing,
+and details (e.g. exact tool, screw count) may be wrong — which is precisely why
+they are surfaced as `vision_removal_step` / `qwen_vl_unverified` / `verified:false`
+and never as authoritative steps. The figure + screw/torque table remain the
+authoritative sources.
+
+Decision: M8.7 vision reconstruction is usable as an additive, clearly-unverified
+aid. It is NOT open-world step accuracy and must never be presented as
+authoritative. The DASHSCOPE key used here was exposed in chat and must be
+rotated.
+
+## M8.7-002: Full-corpus live eval — reconstruction AND figure correctness
+
+Date: 2026-06-17
+
+Motivation: M8.7-001's "figure looks correct" claim rested on a 4-FRU spot check.
+That was too small to trust. This experiment evaluates ALL 171 real-component
+image_only FRUs across the 8 manuals and adds an explicit figure-correctness
+metric: render the figure that `get_fru_procedure` would return, ask qwen-vl to
+NAME the component it depicts, and check that name shares a content token with the
+queried FRU name. Command: `python scripts/thinkpad_vision_live_eval.py` (342
+qwen-vl calls: 1 reconstruction + 1 name-check per FRU).
+
+Results (171 FRUs, all 8 manuals):
+
+| Metric | Value |
+|---|---|
+| Reconstruction non-empty | 171 / 171 (100%) |
+| Spec leaks (torque/screw count/FRU id) | 0 |
+| **Figure correctness (returned image matches queried FRU)** | **130 / 171 (76%)** |
+| Latency reconstruct mean / p95 | 2.7 s / 3.9 s |
+| Latency name-check mean / p95 | 1.6 s / 2.0 s |
+
+**Correction to M8.7-001:** the earlier "figure appears correct" read on 4 FRUs
+was over-optimistic. At full scale, **only 76% of image_only FRUs return the
+correct removal diagram; 41 return a neighbor FRU's figure.**
+
+Root cause is NOT the vision layer — reconstruction is 100% non-empty and 0-leak,
+and the name-check model reliably identifies whatever image it is given. The
+defect is M8.6's figure->FRU attribution (`attribute_figures_to_procedures`,
+page-span containment + narrowest-span tiebreak). The mismatches are systematic
+neighbor-FRU bleed:
+
+- Adjacent-FRU page bleed: e.g. `1090 Built-in battery -> Thermal fan assembly`,
+  `1110 Speaker -> Built-in battery` — a FRU's diagram actually sits on a page the
+  span heuristic assigns to an adjacent FRU.
+- Large-component diagrams spilling onto the previous/next FRU's page:
+  `1210 LCD unit -> Bottom cover`, `2030 LCD hinge -> Bottom cover`.
+- Variant / small-part pages (X1 pen charger/holder) attributed to the wrong
+  neighbor: `1050 Pen charger -> WWAN card`, `1060 Pen holder -> Thermal fan`.
+
+Interpretation: the M8.7 vision pipeline is sound (rebuild reliability, governance,
+latency all good), but the END-TO-END "correct steps for a query" guarantee is
+capped at 76% by figure attribution precision. Page-span containment is too coarse
+when several FRUs share adjacent pages; attribution needs finer signal (e.g. the
+figure's vertical position relative to the FRU heading offset, not just page
+membership).
+
+Decision: record 76% as the honest open-world figure-match rate (NOT 1.0, NOT the
+4/4 spot check). The next milestone (M8.8) should improve figure->FRU attribution
+precision; M8.7's vision steps stay additive/unverified and gated behind it. The
+per-FRU report is at the gitignored `data/eval/m8_7_vision_live_report.jsonl`.
+DASHSCOPE key was exposed in chat and must be rotated.
