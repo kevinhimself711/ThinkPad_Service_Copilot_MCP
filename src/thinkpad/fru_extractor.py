@@ -171,17 +171,17 @@ def extract_fru_procedures(
 def attribute_figures_to_procedures(
     figures: list[FigureRecord],
     procedures: list[FRUProcedure],
+    pages: list[HMMPage] | None = None,
 ) -> tuple[list[FigureRecord], list[FRUProcedure]]:
-    """Link figures to the FRU procedure whose page span contains them.
+    """Link figures to the FRU procedure that owns them, using within-page
+    heading bands when page positional data is available (M8.8).
 
-    Figures are extracted per page with no FRU association (related_fru_id is
-    None). For IMAGE_ONLY procedures the correct answer to a "removal steps"
-    query is the removal diagram, so each figure must know which FRU it belongs
-    to. A figure's page is matched to the procedure whose [page_start, page_end]
-    span contains it; when several procedures overlap a page (variant
-    sub-procedures or multiple FRUs on one page), the narrowest containing span
-    wins, which prefers the most specific owner. Returns updated copies; figures
-    with no containing procedure are returned unchanged.
+    A whole-page raster (vector line-art page) is attributed to the FRU whose
+    heading band covers the bulk of the page's drawing content; an embedded
+    image is attributed by which heading band its bbox falls in. Pages with no
+    heading continue the FRU whose heading most recently precedes the page (a
+    multi-page diagram). When `pages` is omitted (or carries no positional data),
+    falls back to page-span containment with a narrowest-span tiebreak.
     """
 
     spans = [
@@ -189,10 +189,21 @@ def attribute_figures_to_procedures(
         for proc in procedures
         if proc.page_start is not None and proc.page_end is not None
     ]
+    page_info = {page.page: page for page in (pages or [])}
+    # fru_id -> procedures with that fru_id, for mapping a resolved heading to a
+    # concrete procedure (variants share a fru_id).
+    procs_by_fru: dict[str, list[FRUProcedure]] = {}
+    for proc in procedures:
+        procs_by_fru.setdefault(proc.fru_id, []).append(proc)
+    ordered_starts = sorted(
+        ((proc.page_start, proc) for proc in procedures if proc.page_start is not None),
+        key=lambda item: item[0],
+    )
+
     images_by_proc_id: dict[str, list[str]] = {}
     updated_figures: list[FigureRecord] = []
     for figure in figures:
-        owner = _owning_procedure(figure.page, spans)
+        owner = _resolve_owner(figure, spans, page_info, procs_by_fru, ordered_starts)
         if owner is None:
             updated_figures.append(figure)
             continue
@@ -212,6 +223,126 @@ def attribute_figures_to_procedures(
         for proc in procedures
     ]
     return updated_figures, updated_procedures
+
+
+def _resolve_owner(
+    figure: FigureRecord,
+    spans: list[tuple[FRUProcedure, int, int]],
+    page_info: dict[int, HMMPage],
+    procs_by_fru: dict[str, list[FRUProcedure]],
+    ordered_starts: list[tuple[int, FRUProcedure]],
+) -> FRUProcedure | None:
+    page = page_info.get(figure.page)
+    # No positional data -> legacy page-span containment.
+    if page is None or not page.fru_headings:
+        if page is not None and not page.fru_headings:
+            preceding = _nearest_preceding(figure.page, ordered_starts)
+            if preceding is not None:
+                return preceding
+        return _owning_procedure(figure.page, spans)
+
+    headings = page.fru_headings  # sorted (y0, fru_id)
+    if figure.bbox is not None:
+        # Embedded image: the band its vertical center falls into.
+        y_center = (float(figure.bbox[1]) + float(figure.bbox[3])) / 2.0
+        fru_id = _heading_for_y(y_center, headings)
+    else:
+        # Whole-page raster: the heading band holding the most drawing area.
+        fru_id = _dominant_band_fru(headings, page.drawing_bands)
+
+    if fru_id is None:
+        # Content sits above the first heading -> continues the preceding FRU.
+        return _nearest_preceding(figure.page, ordered_starts, exclusive=True)
+    return _procedure_for_fru(fru_id, figure.page, procs_by_fru)
+
+
+def _heading_for_y(y: float, headings: list[tuple[float, str]]) -> str | None:
+    """Return the fru_id of the heading band containing y (heading at or above
+    y, nearest). None when y is above every heading."""
+    chosen: str | None = None
+    for hy, fru_id in headings:
+        if hy <= y:
+            chosen = fru_id
+        else:
+            break
+    return chosen
+
+
+def _dominant_band_fru(
+    headings: list[tuple[float, str]], drawing_bands: list[tuple[float, float]]
+) -> str | None:
+    """Return the fru_id whose heading band holds the most drawing area."""
+    if not headings:
+        return None
+    # Build band boundaries: each heading owns [hy, next_hy).
+    boundaries = [hy for hy, _ in headings] + [float("inf")]
+    area_by_fru: dict[str, float] = {}
+    for idx, (hy, fru_id) in enumerate(headings):
+        lo, hi = boundaries[idx], boundaries[idx + 1]
+        total = 0.0
+        for by0, by1 in drawing_bands:
+            overlap = min(by1, hi) - max(by0, lo)
+            if overlap > 0:
+                total += overlap
+        area_by_fru[fru_id] = area_by_fru.get(fru_id, 0.0) + total
+    # Drawing area above the first heading is NOT owned by any heading on this
+    # page (it continues the previous FRU); signal that with None when it wins.
+    above_first = 0.0
+    first_hy = headings[0][0]
+    for by0, by1 in drawing_bands:
+        overlap = min(by1, first_hy) - by0
+        if overlap > 0:
+            above_first += overlap
+    best_fru = max(area_by_fru, key=lambda k: area_by_fru[k]) if area_by_fru else None
+    if best_fru is None:
+        return None
+    if above_first > area_by_fru[best_fru]:
+        return None
+    return best_fru
+
+
+def _nearest_preceding(
+    page: int,
+    ordered_starts: list[tuple[int, FRUProcedure]],
+    exclusive: bool = False,
+) -> FRUProcedure | None:
+    """Procedure that continues onto `page` when the page carries no heading.
+
+    Prefer a procedure whose page span actually contains the page (a genuine
+    multi-page diagram bleeding onto a heading-less continuation page); only when
+    none contains it fall back to the nearest preceding start. Ties on page_start
+    break to the narrowest span (Intel/AMD variants share a start)."""
+    candidates = [(start, proc) for start, proc in ordered_starts if (start < page if exclusive else start <= page)]
+    if not candidates:
+        return None
+    containing = [(start, proc) for start, proc in candidates if proc.page_end is not None and proc.page_end >= page]
+    pool_src = containing or candidates
+    best_start = max(start for start, _ in pool_src)
+    pool = [proc for start, proc in pool_src if start == best_start]
+    return min(pool, key=_span_width)
+
+
+def _procedure_for_fru(
+    fru_id: str, page: int, procs_by_fru: dict[str, list[FRUProcedure]]
+) -> FRUProcedure | None:
+    """Map a resolved fru_id to a concrete procedure; prefer one whose span
+    contains the page, then narrowest span (handles Intel/AMD variants)."""
+    candidates = procs_by_fru.get(fru_id, [])
+    if not candidates:
+        return None
+    containing = [
+        p for p in candidates
+        if p.page_start is not None and p.page_end is not None and p.page_start <= page <= p.page_end
+    ]
+    pool = containing or candidates
+    return min(pool, key=_span_width)
+
+
+def _span_width(proc: FRUProcedure) -> int:
+    """Page-span width for narrowest-span tiebreaks; 0 when starts are unknown."""
+    start = proc.page_start or 0
+    end = proc.page_end if proc.page_end is not None else start
+    return end - start
 
 
 def _owning_procedure(

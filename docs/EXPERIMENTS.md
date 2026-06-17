@@ -2228,3 +2228,83 @@ Decision: record 76% as the honest open-world figure-match rate (NOT 1.0, NOT th
 precision; M8.7's vision steps stay additive/unverified and gated behind it. The
 per-FRU report is at the gitignored `data/eval/m8_7_vision_live_report.jsonl`.
 DASHSCOPE key was exposed in chat and must be rotated.
+
+## M8.8-001: Figure→FRU attribution via within-page Y-position (bounded live)
+
+Date: 2026-06-17
+
+Motivation: M8.7-002 measured the end-to-end "correct removal diagram for a query"
+rate at **76% (130/171)** — capped not by the vision layer but by M8.6's
+figure→FRU attribution (page-span containment + narrowest-span tiebreak), which
+hands a page's whole-page raster to the wrong neighbor FRU when adjacent FRUs
+share pages.
+
+Change (treat-the-cause, not page-number patching): the loader now captures
+within-page positional signal — FRU heading y-offsets (`get_text("dict")` block
+bboxes), vector-drawing y-bands (`get_drawings()` rects), and embedded-image
+bboxes (`get_image_rects`). Attribution was rewritten:
+
+- **Whole-page raster** → the FRU whose heading band holds the most drawing area
+  on that page (`_dominant_band_fru`); area above the first heading signals
+  "continues the previous FRU".
+- **Embedded image** → the heading band its bbox y-center falls in.
+- **Heading-less continuation page** → the preceding FRU whose page span actually
+  *contains* the page (`_nearest_preceding` prefers span-containing candidates,
+  not the narrowest span). This was a second defect found during regeneration:
+  on P1 Gen4, FRU 1080 (Coin-cell, p79 only) and FRU 1090 (M.2 SSD, p79–82)
+  share a start page; the old narrowest-span tiebreak gave 1090's p80–82 diagrams
+  to 1080, leaving 1090 with zero images. The span-containing preference restores
+  all four images to 1090.
+
+Why page number alone is insufficient (empirically ruled out): a pure
+page-ownership rule would move 116/582 figures and BREAK legitimate multi-page
+diagrams — e.g. a diagram spanning three pages whose last page is also the next
+FRU's start page would be stolen by that next FRU. Within-page y-position is the
+discriminating signal.
+
+Command: `python scripts/thinkpad_vision_live_eval.py` (same script as M8.7-002;
+296 qwen-vl calls = 1 reconstruction + 1 name-check per FRU).
+
+Results (148 image_only FRUs, all 8 manuals):
+
+| Metric | M8.7-002 | M8.8-001 |
+|---|---|---|
+| Population (image_only & has imgs & non-diag & ≤4 imgs) | 171 | 148 |
+| Reconstruction non-empty | 171/171 (100%) | 148/148 (100%) |
+| Spec leaks | 0 | 0 |
+| **Figure correctness (returned image == queried FRU)** | **130/171 (76%)** | **133/148 (89%)** |
+| Latency reconstruct mean / p95 | 2.7 s / 3.9 s | 2.4 s / 3.8 s |
+| Latency name-check mean / p95 | 1.6 s / 2.0 s | 1.4 s / 1.8 s |
+
+**Population shift is real and not like-for-like.** The fix moved figures between
+FRUs, so the eval population changed: single-page FRUs that previously held a
+neighbor's continuation figure now correctly hold none and drop out of the
+"has 1–4 images" sample (171 → 148). The 89% is the figure-match rate on the new,
+correctly-attributed population under the identical methodology; it is NOT a claim
+that the same 171 cases rose to 89%. Image_only coverage corpus-wide is 163/194
+(84%) have ≥1 image; 31 FRUs have zero images (13 multi-page, 18 single-page).
+
+**Residual 15 mismatches** are the scoped-out hard cases (the plan set the bar at
+≥85%, not 100%, for exactly this reason):
+
+- Small part sharing a page whose drawing bulk is the larger neighbor (dominant
+  band picks the big component): Coin-cell battery (×3), I/O bracket (×2), Memory
+  module/shield (×2), Pen holder/charger (×3, X1 Yoga variants).
+- Adjacent large-assembly bleed: LCD hinge → Bottom cover, eDP cable → Display
+  assembly, WWAN antenna → Battery, System board → Keyboard.
+- Name-check could not identify the rendered figure: LCD cover → "None" (×1).
+
+These need per-region image cropping (sub-page figure extraction) to resolve,
+which is deliberately out of this milestone's scope.
+
+Regression (proves no behavioral regression from the attribution rewrite):
+`thinkpad_agent_evaluate.py --golden-set tests/fixtures/thinkpad_m8_2_reality_golden_set.json --mode deterministic --strict-citation`
+→ 120 queries, 0 failed, strict_citation_accuracy 1.0, trajectory 1.0,
+unsupported_claim_rate 0.0. `pytest tests/thinkpad -m "not llm"` → 139 passed.
+ruff + mypy clean on touched files (mypy 86-error baseline unchanged, 0 net-new).
+
+Decision: 89% clears the ≥85% acceptance bar honestly. Record 89% as the
+open-world figure-match rate on the M8.8 population (NOT 1.0, NOT a like-for-like
+delta on 171). Residual mismatches documented as the cropping problem. The per-FRU
+report (now M8.8 data) is at gitignored `data/eval/m8_7_vision_live_report.jsonl`.
+DASHSCOPE key was exposed in chat again and must be rotated.

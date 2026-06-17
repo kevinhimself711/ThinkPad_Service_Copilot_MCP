@@ -42,7 +42,7 @@ def extract_manual_artifacts(
         output_dir=Path(options.output_dir) / "images",
         write_images=options.write_images,
     )
-    figures, fru_procedures = attribute_figures_to_procedures(figures, fru_procedures)
+    figures, fru_procedures = attribute_figures_to_procedures(figures, fru_procedures, pages)
     return ExtractionResult(
         manual_id=manual.manual_id,
         page_count=len(pages),

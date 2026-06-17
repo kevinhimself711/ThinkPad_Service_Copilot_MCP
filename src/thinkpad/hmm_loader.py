@@ -3,10 +3,15 @@
 from __future__ import annotations
 
 import hashlib
+import re
 from pathlib import Path
 
 from src.thinkpad.manifest import ManualMetadata
 from src.thinkpad.models import HMMPage
+
+# Matches an FRU section heading line ("1010 Base cover assembly"). Mirrors
+# fru_extractor's heading shape; used to capture the heading's within-page y.
+_FRU_HEADING_LINE_RE = re.compile(r"^\s*(?P<fru_id>[1-9]\d{3})\s+[A-Za-z][^\n]{2,80}$")
 
 
 class HMMExtractionError(RuntimeError):
@@ -49,6 +54,10 @@ def load_hmm_pages(
             except Exception:
                 drawing_count = 0
 
+            fru_headings = _page_fru_headings(page)
+            drawing_bands = _page_drawing_bands(page)
+            image_bboxes = _page_image_bboxes(page, image_xrefs)
+
             table_blocks: list[list[list[str]]] = []
             if hasattr(page, "find_tables") and _should_probe_tables(page_text):
                 try:
@@ -73,11 +82,81 @@ def load_hmm_pages(
                     height=float(rect.height),
                     table_blocks=table_blocks,
                     image_xrefs=image_xrefs,
+                    fru_headings=fru_headings,
+                    drawing_bands=drawing_bands,
+                    image_bboxes=image_bboxes,
                 )
             )
         return pages
     finally:
         doc.close()
+
+
+def _page_fru_headings(page: object) -> list[tuple[float, str]]:
+    """Return (y0, fru_id) for FRU section headings on the page, top-to-bottom."""
+
+    headings: list[tuple[float, str]] = []
+    try:
+        blocks = page.get_text("dict").get("blocks", [])  # type: ignore[attr-defined]
+    except Exception:
+        return headings
+    for block in blocks:
+        if block.get("type") != 0:
+            continue
+        text = " ".join(
+            span.get("text", "")
+            for line in block.get("lines", [])
+            for span in line.get("spans", [])
+        ).strip()
+        match = _FRU_HEADING_LINE_RE.match(text)
+        if match:
+            y0 = float(block.get("bbox", [0, 0, 0, 0])[1])
+            headings.append((y0, match.group("fru_id")))
+    headings.sort(key=lambda item: item[0])
+    return headings
+
+
+def _page_drawing_bands(page: object) -> list[tuple[float, float]]:
+    """Return (y0, y1) vertical extents of vector drawings on the page.
+
+    Aggregated per drawing rect (not per primitive) to keep memory bounded on
+    dense line-art pages. Used to find which heading band holds the bulk of the
+    page's diagram content.
+    """
+
+    bands: list[tuple[float, float]] = []
+    try:
+        drawings = page.get_drawings()  # type: ignore[attr-defined]
+    except Exception:
+        return bands
+    for drawing in drawings:
+        rect = drawing.get("rect")
+        if rect is None:
+            continue
+        try:
+            bands.append((float(rect.y0), float(rect.y1)))
+        except Exception:
+            continue
+    return bands
+
+
+def _page_image_bboxes(
+    page: object, image_xrefs: list[int]
+) -> list[tuple[float, float, float, float]]:
+    """Return one bbox per xref (aligned with image_xrefs); zeros if not found."""
+
+    bboxes: list[tuple[float, float, float, float]] = []
+    for xref in image_xrefs:
+        bbox = (0.0, 0.0, 0.0, 0.0)
+        try:
+            rects = page.get_image_rects(xref)  # type: ignore[attr-defined]
+            if rects:
+                r = rects[0]
+                bbox = (float(r.x0), float(r.y0), float(r.x1), float(r.y1))
+        except Exception:
+            pass
+        bboxes.append(bbox)
+    return bboxes
 
 
 def _verify_local_pdf(manual: ManualMetadata, path: Path) -> None:

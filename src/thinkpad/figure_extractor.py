@@ -43,6 +43,11 @@ def extract_figure_records(
                 storage_uri = None
                 if write_images and doc is not None:
                     storage_uri = _write_embedded_image(doc, page, image_index, image_id, output_path)
+                bbox: tuple[float, float, float, float] | None = None
+                if image_index < len(page.image_bboxes):
+                    candidate = page.image_bboxes[image_index]
+                    if any(candidate):
+                        bbox = candidate
                 records.append(
                     FigureRecord(
                         image_id=image_id,
@@ -53,6 +58,7 @@ def extract_figure_records(
                         surrounding_text=surrounding_text,
                         storage_uri=storage_uri,
                         source_url=manual.source_url,
+                        bbox=bbox,
                     )
                 )
 

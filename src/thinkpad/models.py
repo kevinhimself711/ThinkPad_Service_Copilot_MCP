@@ -56,6 +56,16 @@ class HMMPage:
     height: float | None = None
     table_blocks: list[list[list[str]]] = field(default_factory=list)
     image_xrefs: list[int] = field(default_factory=list)
+    # Within-page FRU heading positions: (y0, fru_id), top-to-bottom. Enables
+    # attributing a whole-page diagram to the FRU whose heading band owns the
+    # page's drawing content (M8.8), rather than coarse page-span containment.
+    fru_headings: list[tuple[float, str]] = field(default_factory=list)
+    # Drawing vertical coverage as (y0, y1) bands, used to find which heading
+    # band holds the bulk of the page's line-art.
+    drawing_bands: list[tuple[float, float]] = field(default_factory=list)
+    # Embedded-image bounding boxes aligned with image_xrefs order (x0,y0,x1,y1),
+    # so a figure's within-page y can be compared to FRU heading bands.
+    image_bboxes: list[tuple[float, float, float, float]] = field(default_factory=list)
 
     def __post_init__(self) -> None:
         _require_non_empty(self.manual_id, "manual_id")

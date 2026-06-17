@@ -1669,3 +1669,58 @@ adjacent FRUs share pages. The vision layer is sound (100% non-empty, 0 leaks);
 the bottleneck is attribution precision. M8.8 should use finer signal than page
 membership — e.g. the figure's vertical position vs the FRU heading offset within
 the page.
+
+## M8.8: Figure→FRU Attribution via Within-Page Y-Position
+
+- Date: 2026-06-17
+- User goal: raise the M8.7-002 figure-match rate (76%) by fixing figure→FRU
+  attribution at the cause (within-page position), acceptance ≥85% (not 100%).
+- Scope included: capture per-page heading y-offsets, drawing y-bands, embedded
+  image bboxes in the loader; fill `FigureRecord.bbox` for embedded images;
+  rewrite `attribute_figures_to_procedures` to use heading bands; regenerate
+  extraction; deterministic regression; bounded live re-eval; docs.
+- Scope excluded: sub-page image cropping for deeply interleaved multi-FRU pages
+  (the residual cause of the remaining 15 mismatches); any change to the
+  authoritative step path (M8.6) or the vision layer (M8.7).
+- Decisions: y-position over page-number — empirically a pure page-ownership rule
+  would move 116/582 figures and break legitimate multi-page diagrams. Whole-page
+  raster → dominant heading-band by drawing area; embedded image → bbox band;
+  heading-less continuation page → preceding FRU whose span *contains* the page.
+
+### File-Level Changes
+
+| Change | Path | Implementation Fact |
+|---|---|---|
+| Modified | `src/thinkpad/models.py` | `HMMPage` gains `table_blocks`, `image_xrefs`, `fru_headings: list[(y0, fru_id)]`, `drawing_bands: list[(y0,y1)]`, `image_bboxes` (aligned with image_xrefs). All default-empty (back-compatible). |
+| Modified | `src/thinkpad/hmm_loader.py` | `_FRU_HEADING_LINE_RE`; `_page_fru_headings` (dict-block bboxes matching heading regex, sorted by y0), `_page_drawing_bands` (`get_drawings()` rects → (y0,y1)), `_page_image_bboxes` (`get_image_rects(xref)`, zeros if absent). Wired into `load_hmm_pages`. |
+| Modified | `src/thinkpad/figure_extractor.py` | Embedded-image `FigureRecord.bbox` filled from `page.image_bboxes` (explicit 4-tuple; None when all-zero). |
+| Modified | `src/thinkpad/fru_extractor.py` | `attribute_figures_to_procedures(figures, procedures, pages=None)`. New `_resolve_owner`, `_heading_for_y`, `_dominant_band_fru`, `_nearest_preceding` (prefers span-containing candidates, then narrowest via `_span_width`), `_procedure_for_fru`. Legacy `_owning_procedure` kept as fallback when no positional data. |
+| Modified | `src/thinkpad/extraction.py` | Pass `pages` to `attribute_figures_to_procedures`. |
+| Modified | `tests/thinkpad/test_figure_extractor.py` | Legacy test re-documented as fallback; added y-band raster bleed, multi-page-not-stolen, embedded-bbox-band, and continuation-page-prefers-containing-span tests. |
+
+### Scripts And Commands
+
+| Script/Command | Purpose | Result |
+|---|---|---|
+| `python scripts/thinkpad_extract_hmm.py` | Regenerate `data/extracted/m3/*` (gitignored) with new attribution. | 8 manuals OK. P1 Gen4 FRU 1090 (M.2 SSD, p79–82) now owns its 4 images; image_only coverage 163/194 (84%). |
+| `python -m pytest tests/thinkpad -q -m "not llm"` | Domain suite incl. new attribution tests. | 139 passed. |
+| `python scripts/thinkpad_agent_evaluate.py --golden-set tests/fixtures/thinkpad_m8_2_reality_golden_set.json --mode deterministic --strict-citation` | Regression, vision OFF. | 120 cases, 0 failed, strict-citation 1.0, trajectory 1.0. |
+| `DASHSCOPE_API_KEY=*** python scripts/thinkpad_vision_live_eval.py` | Bounded live figure-match re-eval (148 FRUs, 296 qwen-vl calls). | figure correctness **133/148 (89%)**, up from 76%; reconstruction 148/148, 0 leaks; latency 2.4s/1.4s. See EXPERIMENTS M8.8-001. |
+
+### Deviations And Risks
+
+- Population shifted 171→148 between M8.7-002 and M8.8-001 (the fix moves figures
+  off single-page FRUs that wrongly held a neighbor's continuation figure). 89% is
+  the rate on the corrected population, NOT a like-for-like delta — recorded
+  honestly in EXPERIMENTS/EVAL_REPORT.
+- 31 image_only FRUs end with zero images (small parts sharing a page whose
+  drawing bulk is a larger neighbor). Better-no-image than wrong-image for these,
+  but they are a coverage gap; full fix needs sub-page cropping.
+- 15 residual live mismatches are the same shared-page/cropping class.
+
+### Handoff
+
+DASHSCOPE_API_KEY was exposed in chat again and MUST be rotated. To raise
+coverage/precision past 89%, the next step is sub-page figure extraction (crop
+each exploded-view region to its own image keyed by heading band) so small parts
+sharing a page get their own figure instead of inheriting the dominant neighbor's.

@@ -890,3 +890,35 @@ page-span attribution being too coarse when adjacent FRUs share pages. An earlie
 4-FRU spot check (M8.7-001) suggested figures were correct; the full-corpus run
 corrects that to 76%. Improving figure attribution precision is the M8.8 target.
 The DASHSCOPE key used was exposed in chat and must be rotated.
+
+## M8.8 Figure→FRU Attribution Precision (within-page Y-position)
+
+M8.8 fixes the 76% bottleneck from M8.7-002. Attribution no longer relies on
+page-span containment alone; it uses within-page y-position — FRU heading offsets,
+vector-drawing y-bands, and embedded-image bboxes captured by the loader. A
+whole-page raster goes to the FRU whose heading band holds the page's drawing
+bulk; an embedded image goes to the band its bbox falls in; a heading-less
+continuation page goes to the preceding FRU whose span *contains* the page (not
+the narrowest span).
+
+Bounded live re-eval (`scripts/thinkpad_vision_live_eval.py`, identical method):
+
+| Metric | M8.7-002 | M8.8-001 |
+|---|---|---|
+| Population (image_only, has imgs, non-diag, ≤4) | 171 | 148 |
+| Reconstruction non-empty | 100% | 148/148 (100%) |
+| Spec leaks | 0 | 0 |
+| **Figure correctness (returned image == queried FRU)** | **130/171 (76%)** | **133/148 (89%)** |
+| Latency reconstruct / name-check (mean) | 2.7 s / 1.6 s | 2.4 s / 1.4 s |
+
+**Honesty note:** this is NOT a like-for-like 171→delta. The fix moved figures
+between FRUs, so the eligible population shifted 171→148 (single-page FRUs that
+held a neighbor's continuation figure now correctly hold none and leave the
+"has 1–4 images" sample). 89% is the figure-match rate on the corrected
+population under the same scorer. Corpus image_only coverage is 163/194 (84%)
+with ≥1 image. The 15 residual mismatches are small parts sharing a page with a
+larger neighbor (coin-cell, I/O bracket, memory module, pen holder/charger) plus
+a few adjacent large-assembly bleeds — these need sub-page image cropping, which
+is out of M8.8 scope (the acceptance bar was ≥85%, not 100%). No regression:
+120-case deterministic strict = 0 failed / 1.0; `pytest tests/thinkpad` 139
+passed. The DASHSCOPE key was exposed in chat again and must be rotated.
