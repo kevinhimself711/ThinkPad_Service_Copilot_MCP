@@ -41,6 +41,13 @@ def _register_vision_providers() -> None:
     except ImportError:
         pass
 
+    try:
+        from src.libs.llm.dashscope_vision_llm import DashScopeVisionLLM
+        from src.libs.llm.llm_factory import LLMFactory
+        LLMFactory.register_vision_provider("dashscope", DashScopeVisionLLM)
+    except ImportError:
+        pass
+
 
 class LLMFactory:
     """Factory for creating LLM provider instances.

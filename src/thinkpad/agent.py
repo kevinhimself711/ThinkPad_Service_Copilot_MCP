@@ -684,6 +684,25 @@ def _build_structured_plan(evidence: EvidenceBundle) -> list[RepairPlanStep]:
                         [_citation_with_source(item.get("citation") or {}, "procedure_diagram")],
                     )
                 )
+                for vision_step in (item.get("vision_steps") or [])[:6]:
+                    vision_text = str(vision_step.get("text") or "").strip()
+                    if not vision_text:
+                        continue
+                    steps.append(
+                        _step(
+                            len(steps) + 1,
+                            f"UNVERIFIED (AI-read from diagram) FRU {item.get('fru_id') or ''}".strip(),
+                            f"AI-reconstructed action from the removal diagram, NOT manual text "
+                            f"and NOT authoritative: {vision_text}",
+                            "fru_procedure",
+                            [
+                                _citation_with_source(
+                                    vision_step.get("citation") or item.get("citation") or {},
+                                    "qwen_vl_unverified",
+                                )
+                            ],
+                        )
+                    )
             else:
                 steps.append(
                     _step(

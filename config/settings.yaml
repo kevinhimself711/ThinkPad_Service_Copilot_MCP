@@ -33,19 +33,18 @@ embedding:
   # api_key: "YOUR_API_KEY_HERE"
 
 # =============================================================================
-# Vision LLM Configuration (for Image Captioning)
+# Vision LLM Configuration (qwen-vl for image_only FRU removal-step reconstruction, M8.7)
 # =============================================================================
 vision_llm:
-  enabled: false  # M4 does not run vision captioning
-  provider: "openai"  # Options: openai, azure, ollama
-  model: "gpt-4o"  # Options: gpt-4o, gpt-4-vision-preview (OpenAI), llava (Ollama)
-  # Azure-compatible settings (azure_endpoint triggers Azure compat mode):
-  azure_endpoint: "https://YOUR_ENDPOINT.openai.azure.com/"
-  deployment_name: "gpt-4o"
+  enabled: false  # Default off: deterministic baselines run without vision. Enable for live vision runs.
+  provider: "dashscope"  # Options: dashscope (qwen-vl), openai, azure
+  model: "qwen-vl-max"  # DashScope vision model
+  base_url: "https://dashscope.aliyuncs.com/compatible-mode/v1"
+  api_key: ""  # Leave empty; key is read from DASHSCOPE_API_KEY env var. Never commit a real key.
+  # Azure-compatible settings (only used when provider is azure):
+  azure_endpoint: ""
+  deployment_name: ""
   api_version: "2024-02-15-preview"
-  api_key: "YOUR_API_KEY_HERE"
-  # Ollama-specific settings (if provider is ollama):
-  # base_url: "http://localhost:11434"
   max_image_size: 2048  # Max dimension (width/height) for image compression
 
 # =============================================================================

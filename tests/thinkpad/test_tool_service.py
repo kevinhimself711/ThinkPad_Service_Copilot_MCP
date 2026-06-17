@@ -304,6 +304,8 @@ def test_get_fru_procedure_image_only_returns_figure_not_fabricated_steps() -> N
     assert [f["image_id"] for f in proc["figures"]] == ["fig_ssd"]
     assert len(proc["screw_rows"]) == 1
     assert proc["screw_rows"][0]["row"]["Torque"] == "0.18 Nm"
+    # Vision disabled (no vision_llm injected): vision_steps stays empty (M8.6 behavior).
+    assert proc["vision_steps"] == []
 
 
 def test_get_fru_dependency_chain_returns_cited_graph_evidence() -> None:

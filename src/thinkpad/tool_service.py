@@ -42,6 +42,7 @@ class ThinkPadToolService:
         figures: list[dict[str, Any]] | None = None,
         warnings: list[dict[str, Any]] | None = None,
         retriever: Retriever | None = None,
+        vision_llm: Any | None = None,
     ) -> None:
         self.manifest_path = resolve_path(manifest_path or _default_manifest_path())
         self.extracted_dir = resolve_path(extracted_dir or "data/extracted/m3")
@@ -53,6 +54,8 @@ class ThinkPadToolService:
         self._figures = list(figures) if figures is not None else None
         self._warnings = list(warnings) if warnings is not None else None
         self._retriever = retriever or retrieve_thinkpad
+        self._vision_llm = vision_llm
+        self._vision_cache: dict[str, list[dict[str, Any]]] | None = None
 
     @property
     def manuals(self) -> list[ManualMetadata]:
@@ -294,12 +297,58 @@ class ThinkPadToolService:
             _fru_result(record, figures_by_id, screw_rows_by_fru)
             for record in candidates[:top_k]
         ]
+        self._attach_vision_steps(results, candidates[:top_k])
         return _lookup_response(
             tool="get_fru_procedure",
             results=results,
             model_resolution=guard["model_resolution"],
             not_found_message=f"No structured FRU procedure found for {query}.",
         )
+
+    def _attach_vision_steps(
+        self,
+        results: list[dict[str, Any]],
+        records: list[dict[str, Any]],
+    ) -> None:
+        """Additively attach unverified qwen-vl removal steps to image_only results.
+
+        No-op unless a vision LLM is configured and enabled. The authoritative
+        fields (steps / step_records / figures / screw_rows) are never modified;
+        vision steps live only in the separate `vision_steps` key. Any failure
+        degrades silently to the M8.6 figure-only behavior.
+        """
+
+        if self._vision_llm is None or not self._vision_enabled():
+            return
+        from src.thinkpad import vision_steps as vision_module
+
+        raw_figures_by_id = {
+            str(fig["image_id"]): fig for fig in self.figures if fig.get("image_id")
+        }
+        pdf_by_manual = {m.manual_id: m.local_pdf_path for m in self.manuals}
+        if self._vision_cache is None:
+            self._vision_cache = vision_module.load_cache()
+
+        for result, record in zip(results, records):
+            if result.get("presentation_type") != "image_only":
+                continue
+            pdf_path = pdf_by_manual.get(str(record.get("manual_id") or ""))
+            if not pdf_path:
+                continue
+            try:
+                result["vision_steps"] = vision_module.get_or_reconstruct(
+                    self._vision_llm,
+                    record,
+                    raw_figures_by_id,
+                    pdf_path,
+                    cache=self._vision_cache,
+                )
+            except Exception:  # noqa: BLE001 - degrade to figure-only on any failure
+                continue
+
+    def _vision_enabled(self) -> bool:
+        vision_settings = getattr(self.settings, "vision_llm", None)
+        return bool(getattr(vision_settings, "enabled", False))
 
     def get_fru_dependency_chain(
         self,
@@ -652,6 +701,7 @@ def _fru_result(
         "related_image_ids": related_image_ids,
         "figures": figures,
         "screw_rows": screw_rows,
+        "vision_steps": [],
         "citation": _citation_for(record),
     }
 
