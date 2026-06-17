@@ -82,7 +82,9 @@ Do not rewrite the generic MCP server, vector store layer, dashboard, provider a
 
 ## 3. Current Repository Reality
 
-The repository has completed M0-M8.4c and is ready for M9 packaging/interview-readiness work only if demo/README claims clearly distinguish contract regression, raw live provider quality, recovered user-visible success, human-gold coverage, and strict citation quality.
+The repository has completed M0-M8.8. The current M8.8 implementation baseline is `51d89d5 fix(thinkpad): attribute figures to FRUs by within-page Y-position (M8.8)`.
+
+The project is not yet ready to jump straight into M9 packaging as the next best step. M8.5-M8.8 changed the system's core procedure model: most HMM removal procedures in this corpus are diagram-first or image-only, so the system must not pretend it extracted authoritative textual steps from the PDF. M8.9 should address the remaining figure-region mismatch/coverage gap before M9 packages the demo and interview narrative.
 
 Current milestone status:
 
@@ -105,6 +107,11 @@ Current milestone status:
 | M8.4a | Complete | Human gold review pack generation is implemented; local review artifacts remain ignored. |
 | M8.4b | Complete with risk | Human gold fixture and FRU page scoring were added; human review exposed dependency-chain routing and warning false-positive issues. |
 | M8.4c | Complete with risk | Dependency-chain routing, safety TOC filtering, replacement warning cases, and required live baselines are complete; raw live LLM strict still has provider-timeout failures. |
+| M8.5a | Complete as failed-gate prep | Step-level citation review tooling was prepared, but the resulting human annotation task exposed that the textual-step premise was wrong for most HMM procedures. |
+| M8.5 | Failed by design review | Human PDF review showed the old extractor matched neighboring text, install notes, specs, FCC/X-Rite/BIOS notes, or page fragments as removal steps; text-step human gold is deprecated. |
+| M8.6 | Complete with risk | Procedure presentation types were added; `image_only` and `cross_ref` procedures no longer fabricate text steps and instead return cited diagrams plus structured table evidence. |
+| M8.7 | Complete with risk | Optional qwen-vl reconstruction was added for image-only diagrams; live eval reconstructed 171/171 with 0 spec leaks, but figure correctness was 130/171 (76%). |
+| M8.8 | Complete with risk | Figure-to-FRU attribution now uses within-page heading y-position, drawing bands, and embedded image bboxes; bounded live figure correctness improved to 133/148 (89%) with 0 spec leaks. |
 
 Canonical audit report: `docs/M0_M7_PROGRESS_AUDIT.md`.
 Canonical M8 performance report: `docs/M8_AGENT_PERFORMANCE_BASELINE.md`.
@@ -112,6 +119,18 @@ Canonical M8.1 remediation report: `docs/M8_1_REMEDIATION_REPORT.md`.
 Canonical M8.2 evaluation reality-check report: `docs/M8_2_EVAL_REALITY_CHECK.md`.
 Canonical M8.3 optimization report: `docs/M8_3_OPTIMIZATION_REPORT.md`.
 Canonical M8.4 human gold report: `docs/M8_4_HUMAN_GOLD_REPORT.md`.
+Canonical M8.5 step citation report: `docs/M8_5_STEP_CITATION_REPORT.md`.
+Canonical M8.5 failure analysis: `docs/POST_M8_5_IMAGE_TEXT_DEFECTS.md`.
+Canonical M8.6 presentation typology report: `docs/M8_6_PRESENTATION_TYPOLOGY.md`.
+
+Current quality boundary after M8.8:
+
+- The 120-case deterministic strict regression remains clean with vision disabled.
+- M8.7 full-corpus vision eval: 171/171 non-empty reconstructions, 0 spec leaks, figure correctness 130/171 (76%).
+- M8.8 bounded live figure eval: 148/148 reconstructed, 0 spec leaks, figure correctness 133/148 (89%).
+- 31 `image_only` FRUs currently have no attributed image after safer y-position attribution.
+- 15 residual live mismatches remain, mostly shared-page/sub-page figure-region cases.
+- qwen-vl `vision_steps` are additive and unverified; they must not be presented as Lenovo-authored procedure text.
 
 Canonical paths:
 
@@ -138,9 +157,16 @@ scripts/thinkpad_audit_milestones.py
 scripts/thinkpad_agent_plan.py
 scripts/thinkpad_agent_evaluate.py
 scripts/thinkpad_generate_agent_eval_candidates.py
+scripts/thinkpad_prepare_human_gold_review.py
+scripts/thinkpad_finalize_human_gold.py
+scripts/thinkpad_prepare_step_citation_review.py
+scripts/thinkpad_render_step_pages.py
+scripts/thinkpad_presentation_typology.py
+scripts/thinkpad_vision_live_smoke.py
+scripts/thinkpad_vision_live_eval.py
 ```
 
-Current MCP tools expose structured evidence. M8 adds a local Python/CLI repair-planning agent client but does not yet expose a `plan_repair` MCP tool.
+Current MCP tools expose structured evidence. M8 adds a local Python/CLI repair-planning agent client but does not expose a `plan_repair` MCP tool. M8.6-M8.8 add a diagram-first FRU procedure path for image-only HMM procedures and optional qwen-vl `vision_steps`; these vision steps remain unverified assistive output, not authoritative manual text.
 
 ---
 
@@ -242,6 +268,7 @@ Canonical documentation roles:
 
 | Document | Purpose |
 |---|---|
+| `AGENTS.md` | Primary Codex instruction file, current project status, operating rules, and roadmap guardrails |
 | `docs/PROJECT_GUIDE.md` | Project direction, milestone boundaries, domain rules, and roadmap |
 | `docs/DEV_SPEC_THINKPAD.md` | Current engineering contracts for ThinkPad domain modules |
 | `docs/EXPERIMENTS.md` | Experiment hypotheses, commands, results, and technical decisions |
@@ -249,6 +276,9 @@ Canonical documentation roles:
 | `docs/INTERVIEW_NOTES.md` | Local private interview questions and answer anchors grounded in real implementation evidence; intentionally not committed |
 | `docs/SPIKE_REPORT.md` | M1 risk-validation findings |
 | `docs/EVAL_REPORT.md` | Retrieval/answer evaluation once available |
+| `docs/M8_5_STEP_CITATION_REPORT.md` | M8.5 step-level citation attempt and annotation-gate context |
+| `docs/POST_M8_5_IMAGE_TEXT_DEFECTS.md` | Human-review failure analysis that deprecated text-step gold for image-only procedures |
+| `docs/M8_6_PRESENTATION_TYPOLOGY.md` | Procedure presentation-type taxonomy and image-only remediation |
 
 Implementation documentation rules:
 
@@ -256,6 +286,9 @@ Implementation documentation rules:
 - Every non-trivial milestone or feature should add interview questions to local private `docs/INTERVIEW_NOTES.md` when that file is present.
 - Interview notes must separate upstream framework capabilities from ThinkPad-specific work.
 - Missing test results, manual checks, or future plans must be marked honestly; do not convert plans into claims.
+- Any milestone that changes current status, roadmap order, evaluation interpretation, public demo claims, or major architecture boundaries must update `AGENTS.md` and `docs/PROJECT_GUIDE.md` in the same work item.
+- If interfaces, schemas, or evidence contracts change, update `docs/DEV_SPEC_THINKPAD.md` in the same work item.
+- Treat `AGENTS.md` and `docs/PROJECT_GUIDE.md` as living documentation assets, not one-time bootstrap files.
 
 ---
 
@@ -270,7 +303,7 @@ HMMs must not be treated as one flat stream of chunks. They contain different da
 | Error table | POST codes, beep errors, symptom rows | `TableRecord` | exact/BM25 first | yes |
 | FRU table | FRU names, CRU flags, part classes | `TableRecord` | exact/BM25 first | yes |
 | Screw spec | size, count, color, torque | `TableRecord` | exact lookup first | yes |
-| FRU procedure | removal/replacement steps | `FRUProcedure` | section + metadata | yes |
+| FRU procedure | removal/replacement text when present; diagram-first/image-only procedures when text is absent | `FRUProcedure` with `presentation_type` and `step_records` | section + metadata + figure ownership | yes |
 | Prerequisite chain | remove 1010 before 1050 | `DependencyEdge` | graph traversal | yes |
 | Diagram/figure | line drawing, exploded view | `FigureRecord` | diagram search | yes |
 | Safety warning | DANGER, CAUTION, battery, ESD | `WarningRecord` | safety boost | yes |
@@ -477,12 +510,15 @@ Domain reranking should prefer:
 | M6 | Evaluation/dashboard | golden set, baseline comparisons, trace/dashboard views |
 | M7 | Graph RAG | FRU dependency graph and traversal tool |
 | M8 | Agent client | local tool-calling repair-planning workflow plus trajectory/faithfulness baseline |
-| M9 | Packaging/interview readiness | Docker/CI, final README, demo script, resume and interview notes |
+| M8.5-M8.8 | Diagram-first procedure correction | failed text-step gold premise, presentation typology, optional unverified qwen-vl reconstruction, and y-position figure attribution |
+| M8.9 | Figure-region evaluation reset | sub-page figure-region cropping, diagram-first gold/eval contract, bounded live figure re-evaluation |
+| M9 | Packaging/interview readiness | Docker/CI, final README, demo script, resume and interview notes after M8.9 risk is closed or accepted |
 
 Every milestone DoD also includes:
 
 - update `docs/IMPLEMENTATION_LOG.md` with concrete file-level facts, commands, validation results, risks, and handoff notes
 - update local private `docs/INTERVIEW_NOTES.md` with 3-8 grounded interview questions when present and when the milestone or feature is non-trivial
+- update `AGENTS.md` and `docs/PROJECT_GUIDE.md` when the milestone changes current status, roadmap order, evaluation interpretation, or public demo claims
 
 M1 actual status:
 
@@ -507,15 +543,16 @@ Do not claim a test passed unless it was run.
 
 ## 16. Open Risks
 
-Current risks carried forward after M8.4c:
+Current risks carried forward after M8.8:
 
 - M1/M3 extraction artifacts are structured candidates, not fully human-audited gold facts.
-- Figure and diagram records are useful retrieval targets, but exact specs must still come from text/table evidence.
+- Figure and diagram records are now first-class procedure evidence for image-only FRUs, but exact specs must still come from text/table evidence.
 - Some M3-derived stress cases still expose component alias and procedure-applicability gaps.
 - M4/M6/M7/M8/M8.4 golden metrics are scoped to committed fixtures and do not represent every possible technician query.
-- M8.4c deterministic and live retrieval baselines are clean on the human-gold and 120-case fixtures, but this remains benchmark-contract evidence, not open-world repair-answer accuracy.
-- M8.4c raw live LLM strict still has provider-timeout failures: 2/18 on human gold and 2/120 on the generated regression fixture.
-- Raw LLM-only planning should not be exposed as the default; deterministic validation and evidence fallback remain required for demo/user-facing behavior.
+- M8.5 textual step gold is deprecated; do not use it as proof of step-level correctness.
+- M8.8 bounded live figure correctness is 133/148 (89%), not 100%; 15 residual mismatches and 31 `image_only` FRUs with zero attributed images remain.
+- qwen-vl vision reconstruction is useful but unverified; it must not be presented as Lenovo-authored text or as the source for torque, screw counts, FRU IDs, or safety facts.
+- Raw LLM-only and raw qwen-vl-only planning should not be exposed as the default; deterministic validation, cited diagrams, structured table evidence, and evidence fallback remain required for demo/user-facing behavior.
 - The local manifest and local index contain real operational metadata/artifacts, but committed examples must remain safe and copyright-light.
 
 Engineering response:
@@ -525,7 +562,8 @@ Engineering response:
 - prefer structured table records for exact facts
 - use live provider tests when they reduce risk, but record provider fallback and failure rates honestly
 - keep LLM composition validation in place before exposing final repair planning through MCP
-- report contract, raw provider, recovered, and strict citation metrics separately
+- report contract, raw provider, recovered, strict citation, figure correctness, and verified-vs-unverified metrics separately
+- run M8.9 before M9 unless the remaining figure-region risk is explicitly accepted and documented
 
 ---
 

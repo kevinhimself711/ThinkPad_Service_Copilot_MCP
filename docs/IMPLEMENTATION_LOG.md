@@ -1724,3 +1724,31 @@ DASHSCOPE_API_KEY was exposed in chat again and MUST be rotated. To raise
 coverage/precision past 89%, the next step is sub-page figure extraction (crop
 each exploded-view region to its own image keyed by heading band) so small parts
 sharing a page get their own figure instead of inheriting the dominant neighbor's.
+
+## M8.8 Status Sync: AGENTS And Project Guide
+
+- Date: 2026-06-17
+- User goal: update `AGENTS.md` and `docs/PROJECT_GUIDE.md` from the stale M8.4c state to the real M8.8 state, and make both files part of the milestone documentation asset workflow so they do not drift again.
+- Scope included: docs-only status sync, current quality-boundary update, M8.5 failure/pivot summary, M8.6-M8.8 diagram-first procedure model summary, M8.9 next-step recommendation, and documentation anti-drift rules.
+- Scope excluded: code changes, live provider calls, extraction regeneration, local `data/` artifacts, and committed private interview notes.
+
+### File-Level Changes
+
+| Change | Path | Implementation Fact |
+|---|---|---|
+| Modified | `AGENTS.md` | Updated current baseline from M8.4c to M8.8, recorded `51d89d5` as the M8.8 implementation baseline, documented the failed M8.5 textual-step premise, M8.6 presentation-type correction, M8.7 unverified qwen-vl reconstruction, M8.8 89% figure-correctness boundary, and M8.9-before-M9 roadmap. |
+| Modified | `AGENTS.md` | Added `AGENTS.md` / `docs/PROJECT_GUIDE.md` synchronization rules to documentation quality and Definition of Done, and added M8.5-M8.8 reports, scripts, tests, and `vision_steps.py` to current repository guidance. |
+| Modified | `docs/PROJECT_GUIDE.md` | Updated current repository reality to M0-M8.8, added M8.5-M8.8 milestone rows, M8.8 quality boundaries, diagram-first FRU procedure taxonomy, current M8.9 recommendation, and documentation anti-drift rules. |
+| Modified | `docs/IMPLEMENTATION_LOG.md` | Added this docs-only status-sync record. |
+
+### Validation
+
+| Command | Purpose | Result |
+|---|---|---|
+| `rg "M0-M8\.4c|Current next milestone: M9|Current next phase: M9|after M8\.4c|M8\.4 human gold fixture as the highest-priority|ready for M9|Package and document the system for M9|Clean up docs so claims match M8\.4c" AGENTS.md docs\PROJECT_GUIDE.md` | Check for stale M8.4c/M9-first language in the two synchronized guide files. | Passed; no matches. |
+| `rg "M8\.5|M8\.6|M8\.7|M8\.8|M8\.9|image_only|qwen-vl|vision_steps|PROJECT_GUIDE|AGENTS" AGENTS.md docs\PROJECT_GUIDE.md` | Confirm M8.5-M8.8 pivot and anti-drift terms are present. | Passed; expected current-state matches present. |
+| `git diff --check` | Whitespace validation. | Passed; only Git CRLF conversion warnings. |
+
+### Handoff
+
+M8.9 should be treated as the recommended next milestone before M9 packaging unless the residual M8.8 figure-region risk is explicitly accepted. M9 demo/interview claims must describe image-only procedures as cited diagram evidence plus structured table facts, with optional unverified qwen-vl assistance, not as authoritative extracted text steps.
