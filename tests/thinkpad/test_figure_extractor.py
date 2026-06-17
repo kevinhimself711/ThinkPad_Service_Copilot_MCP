@@ -122,6 +122,7 @@ def _raster(page):
         manual_id="m",
         page=page,
         citation=Citation(manual_id="m", source_url="https://download.lenovo.com/x.pdf", page_start=page),
+        figure_kind="page_raster",
     )
 
 
@@ -133,6 +134,8 @@ def _page(page, headings, drawing_bands):
         page=page,
         text="",
         source_url="https://download.lenovo.com/x.pdf",
+        width=600.0,
+        height=800.0,
         fru_headings=headings,
         drawing_bands=drawing_bands,
     )
@@ -215,3 +218,58 @@ def test_yband_continuation_page_prefers_containing_span_over_narrowest():
     assert by_id["m_p080_raster"] == "1090"
     assert by_id["m_p081_raster"] == "1090"
     assert by_id["m_p082_raster"] == "1090"
+
+
+def test_region_crops_created_for_shared_raster_page_without_displacing_native_image():
+    from src.thinkpad.fru_extractor import attribute_figures_to_procedures
+
+    procedures = [_proc("1060", "WWAN card", 79, 79), _proc("1070", "WLAN card", 79, 79)]
+    pages = [_page(79, [(100.0, "1060"), (410.0, "1070")], [(130.0, 270.0), (450.0, 620.0)])]
+    figures = [_raster(79)]
+
+    updated_figs, updated_procs = attribute_figures_to_procedures(figures, procedures, pages)
+
+    regions = {f.related_fru_id: f for f in updated_figs if f.figure_kind == "region_crop"}
+    assert set(regions) == {"1060", "1070"}
+    assert regions["1060"].bbox == (0.0, 118.0, 600.0, 282.0)
+    assert regions["1070"].bbox == (0.0, 438.0, 600.0, 632.0)
+    assert regions["1060"].source_image_id == "m_p079_raster"
+
+    procs = {p.fru_id: p for p in updated_procs}
+    assert any(image_id.endswith("_region_1060") for image_id in procs["1060"].related_image_ids)
+    assert any(image_id.endswith("_region_1070") for image_id in procs["1070"].related_image_ids)
+    assert procs["1070"].related_image_ids[0] == "m_p079_raster"
+
+
+def test_region_crop_above_first_heading_continues_preceding_fru():
+    from src.thinkpad.fru_extractor import attribute_figures_to_procedures
+
+    procedures = [_proc("1010", "Base cover", 72, 74), _proc("1020", "Battery", 74, 75)]
+    pages = [_page(74, [(700.0, "1020")], [(60.0, 650.0)])]
+    figures = [_raster(74)]
+
+    updated_figs, updated_procs = attribute_figures_to_procedures(figures, procedures, pages)
+
+    regions = [f for f in updated_figs if f.figure_kind == "region_crop"]
+    assert len(regions) == 1
+    assert regions[0].related_fru_id == "1010"
+    procs = {p.fru_id: p for p in updated_procs}
+    assert any(image_id.endswith("_region_1010") for image_id in procs["1010"].related_image_ids)
+    assert procs["1010"].related_image_ids[0] == "m_p074_raster"
+
+
+def test_region_crop_skips_diagnostic_pseudo_fru_ids():
+    from src.thinkpad.fru_extractor import attribute_figures_to_procedures
+
+    procedures = [
+        _proc("2201", "Machine UUID is invalid", 40, 44),
+        _proc("1060", "Thermal fan assembly", 44, 45),
+    ]
+    pages = [_page(44, [(100.0, "2201"), (400.0, "1060")], [(130.0, 250.0), (430.0, 560.0)])]
+    figures = [_raster(44)]
+
+    updated_figs, _ = attribute_figures_to_procedures(figures, procedures, pages)
+
+    regions = {f.related_fru_id: f for f in updated_figs if f.figure_kind == "region_crop"}
+    assert "2201" not in regions
+    assert "1060" in regions

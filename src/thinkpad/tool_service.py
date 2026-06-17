@@ -760,6 +760,8 @@ def _figure_result(record: dict[str, Any]) -> dict[str, Any]:
         "related_component": record.get("related_component"),
         "storage_uri": record.get("storage_uri"),
         "bbox": record.get("bbox"),
+        "figure_kind": record.get("figure_kind") or "unknown",
+        "source_image_id": record.get("source_image_id"),
         "citation": _citation_for(record),
     }
 

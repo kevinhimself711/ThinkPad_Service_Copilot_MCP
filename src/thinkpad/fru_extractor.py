@@ -200,9 +200,12 @@ def attribute_figures_to_procedures(
         key=lambda item: item[0],
     )
 
+    region_figures = _build_region_crop_figures(figures, procedures, page_info, procs_by_fru, ordered_starts)
+    all_figures = [*figures, *region_figures]
+
     images_by_proc_id: dict[str, list[str]] = {}
     updated_figures: list[FigureRecord] = []
-    for figure in figures:
+    for figure in all_figures:
         owner = _resolve_owner(figure, spans, page_info, procs_by_fru, ordered_starts)
         if owner is None:
             updated_figures.append(figure)
@@ -216,13 +219,180 @@ def attribute_figures_to_procedures(
             )
         )
 
+    figure_by_id = {figure.image_id: figure for figure in updated_figures}
     updated_procedures = [
-        replace(proc, related_image_ids=images_by_proc_id.get(proc.procedure_id, list(proc.related_image_ids)))
+        replace(
+            proc,
+            related_image_ids=_prioritize_related_images(
+                images_by_proc_id.get(proc.procedure_id, list(proc.related_image_ids)),
+                figure_by_id,
+            ),
+        )
         if proc.procedure_id in images_by_proc_id
         else proc
         for proc in procedures
     ]
     return updated_figures, updated_procedures
+
+
+def _prioritize_related_images(
+    image_ids: list[str],
+    figure_by_id: dict[str, FigureRecord],
+) -> list[str]:
+    """Keep stable native figure evidence before experimental crop evidence.
+
+    M8.9 region crops recover some no-image/shared-page cases, but full live
+    testing showed that making crops the first image can regress qwen-vl naming
+    on procedures whose original page/embedded figure was already correct.
+    """
+
+    priority = {"embedded_image": 0, "page_raster": 1, "region_crop": 2, "unknown": 3}
+    return sorted(
+        dict.fromkeys(image_ids),
+        key=lambda image_id: (
+            priority.get((figure_by_id.get(image_id).figure_kind if figure_by_id.get(image_id) else "unknown"), 3),
+            image_id,
+        ),
+    )
+
+
+def _build_region_crop_figures(
+    figures: list[FigureRecord],
+    procedures: list[FRUProcedure],
+    page_info: dict[int, HMMPage],
+    procs_by_fru: dict[str, list[FRUProcedure]],
+    ordered_starts: list[tuple[int, FRUProcedure]],
+) -> list[FigureRecord]:
+    """Create FRU-owned sub-page crop records for shared vector/raster pages.
+
+    The crop records are metadata only; rendering clips the source PDF page later
+    in `vision_steps.render_procedure_images`. We only create regions when the
+    page has positional signals and vector drawing bands, which avoids replacing
+    robust embedded-image extraction with guessed crops.
+    """
+
+    by_page: dict[int, FigureRecord] = {}
+    for figure in figures:
+        if (figure.figure_kind or "unknown") == "page_raster" or figure.image_id.endswith("_raster"):
+            by_page.setdefault(figure.page, figure)
+
+    regions: list[FigureRecord] = []
+    for page_number, page in page_info.items():
+        source = by_page.get(page_number)
+        if source is None or not page.fru_headings or not page.drawing_bands:
+            continue
+        if len(page.fru_headings) < 2 and not _has_above_first_heading_drawing(page):
+            continue
+        for fru_id, bbox in _region_bboxes_for_page(page, ordered_starts):
+            owner = _procedure_for_fru(fru_id, page_number, procs_by_fru)
+            if owner is None:
+                continue
+            if _is_diagnostic_pseudo_fru(owner):
+                continue
+            region_id = f"{source.image_id}_region_{fru_id}"
+            regions.append(
+                replace(
+                    source,
+                    image_id=region_id,
+                    caption=f"Region crop for FRU {fru_id} removal diagram",
+                    related_fru_id=owner.fru_id,
+                    related_component=owner.fru_name,
+                    bbox=bbox,
+                    figure_kind="region_crop",
+                    source_image_id=source.image_id,
+                    storage_uri=None,
+                )
+            )
+    return regions
+
+
+def _is_diagnostic_pseudo_fru(proc: FRUProcedure) -> bool:
+    name = proc.fru_name.lower()
+    return proc.fru_id.startswith("22") and any(
+        marker in name for marker in ("uuid", "invalid", "error", "failure", "configuration")
+    )
+
+
+def _has_above_first_heading_drawing(page: HMMPage) -> bool:
+    if not page.fru_headings:
+        return False
+    first_heading = float(page.fru_headings[0][0])
+    return _drawing_overlap(page.drawing_bands, 0.0, first_heading) is not None
+
+
+def _region_bboxes_for_page(
+    page: HMMPage,
+    ordered_starts: list[tuple[int, FRUProcedure]],
+) -> list[tuple[str, tuple[float, float, float, float]]]:
+    if not page.width or not page.height or not page.fru_headings or not page.drawing_bands:
+        return []
+    regions: dict[str, tuple[float, float]] = {}
+    height = float(page.height)
+    width = float(page.width)
+    headings = page.fru_headings
+    boundaries = [float(y) for y, _ in headings] + [height]
+
+    for index, (heading_y, fru_id) in enumerate(headings):
+        lo = max(0.0, float(heading_y))
+        hi = min(height, boundaries[index + 1])
+        overlap = _drawing_overlap(page.drawing_bands, lo, hi)
+        if overlap is not None:
+            regions[fru_id] = _merge_band(regions.get(fru_id), overlap)
+
+    first_heading = float(headings[0][0])
+    above_overlap = _drawing_overlap(page.drawing_bands, 0.0, first_heading)
+    if above_overlap is not None:
+        preceding = _nearest_preceding(page.page, ordered_starts, exclusive=True)
+        if preceding is not None:
+            regions[preceding.fru_id] = _merge_band(regions.get(preceding.fru_id), above_overlap)
+
+    return [
+        (fru_id, _padded_bbox(0.0, band[0], width, band[1], width, height))
+        for fru_id, band in regions.items()
+    ]
+
+
+def _drawing_overlap(
+    drawing_bands: list[tuple[float, float]],
+    lo: float,
+    hi: float,
+    min_height: float = 8.0,
+) -> tuple[float, float] | None:
+    overlaps: list[tuple[float, float]] = []
+    for by0, by1 in drawing_bands:
+        start = max(float(by0), lo)
+        end = min(float(by1), hi)
+        if end - start >= min_height:
+            overlaps.append((start, end))
+    if not overlaps:
+        return None
+    return min(start for start, _ in overlaps), max(end for _, end in overlaps)
+
+
+def _merge_band(
+    existing: tuple[float, float] | None,
+    new_band: tuple[float, float],
+) -> tuple[float, float]:
+    if existing is None:
+        return new_band
+    return min(existing[0], new_band[0]), max(existing[1], new_band[1])
+
+
+def _padded_bbox(
+    x0: float,
+    y0: float,
+    x1: float,
+    y1: float,
+    page_width: float,
+    page_height: float,
+    padding: float = 12.0,
+) -> tuple[float, float, float, float]:
+    return (
+        max(0.0, x0),
+        max(0.0, y0 - padding),
+        min(page_width, x1),
+        min(page_height, y1 + padding),
+    )
 
 
 def _resolve_owner(
@@ -232,6 +402,8 @@ def _resolve_owner(
     procs_by_fru: dict[str, list[FRUProcedure]],
     ordered_starts: list[tuple[int, FRUProcedure]],
 ) -> FRUProcedure | None:
+    if figure.figure_kind == "region_crop" and figure.related_fru_id:
+        return _procedure_for_fru(figure.related_fru_id, figure.page, procs_by_fru)
     page = page_info.get(figure.page)
     # No positional data -> legacy page-span containment.
     if page is None or not page.fru_headings:

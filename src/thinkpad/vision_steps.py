@@ -50,19 +50,18 @@ def render_procedure_images(
     """Render the pages of a procedure's attributed figures to PNG bytes.
 
     Renders in-memory (no disk write) to avoid materializing copyrighted image
-    files. Only pages of the procedure's related figures are rendered, which
-    bounds payload size for multi-page procedures.
+    files. Region-crop figures carry a page-coordinate bbox; those are rendered
+    with a PyMuPDF clip so qwen-vl sees the intended sub-page diagram instead
+    of the whole shared FRU page.
     """
 
     related = procedure.get("related_image_ids") or []
-    pages: list[int] = []
+    render_jobs: list[dict[str, Any]] = []
     for image_id in related:
         figure = figures_by_id.get(image_id)
         if figure and isinstance(figure.get("page"), int):
-            page = figure["page"]
-            if page not in pages:
-                pages.append(page)
-    if not pages:
+            render_jobs.append(figure)
+    if not render_jobs:
         return []
 
     try:
@@ -73,10 +72,16 @@ def render_procedure_images(
     images: list[ImageInput] = []
     doc = fitz.open(str(pdf_path))
     try:
-        for page_number in pages:
+        for figure in render_jobs:
+            page_number = int(figure["page"])
             if page_number < 1 or page_number > doc.page_count:
                 continue
-            pixmap = doc[page_number - 1].get_pixmap()
+            should_clip = figure.get("figure_kind") == "region_crop"
+            bbox = figure.get("bbox") if should_clip and isinstance(figure.get("bbox"), (list, tuple)) else None
+            clip = None
+            if bbox and len(bbox) == 4:
+                clip = fitz.Rect(float(bbox[0]), float(bbox[1]), float(bbox[2]), float(bbox[3]))
+            pixmap = doc[page_number - 1].get_pixmap(clip=clip)
             images.append(ImageInput(data=pixmap.tobytes("png"), mime_type="image/png"))
     finally:
         doc.close()
@@ -206,4 +211,3 @@ def _append_cache(cache_path: str | Path, key: str, steps: list[dict[str, Any]])
             handle.write(json.dumps({"key": key, "steps": steps}, ensure_ascii=False) + "\n")
     except OSError:  # pragma: no cover - cache write is best-effort
         pass
-

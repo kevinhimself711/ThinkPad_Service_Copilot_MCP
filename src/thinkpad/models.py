@@ -30,6 +30,15 @@ _PRESENTATION_TYPES = frozenset(
     }
 )
 
+_FIGURE_KINDS = frozenset(
+    {
+        "embedded_image",
+        "page_raster",
+        "region_crop",
+        "unknown",
+    }
+)
+
 
 def _require_non_empty(value: str | None, field_name: str) -> None:
     if value is None or not str(value).strip():
@@ -158,6 +167,8 @@ class FigureRecord:
     related_component: str | None = None
     storage_uri: str | None = None
     bbox: tuple[float, float, float, float] | None = None
+    figure_kind: str = "unknown"
+    source_image_id: str | None = None
     source_url: str | None = None
 
     def __post_init__(self) -> None:
@@ -169,6 +180,8 @@ class FigureRecord:
             raise DomainModelError("citation.manual_id must match figure manual_id")
         if self.bbox is not None and len(self.bbox) != 4:
             raise DomainModelError("bbox must contain four float coordinates")
+        if self.figure_kind not in _FIGURE_KINDS:
+            raise DomainModelError(f"figure_kind must be one of {sorted(_FIGURE_KINDS)}")
 
     def to_dict(self) -> dict[str, Any]:
         """Return a JSON-safe representation."""

@@ -11,6 +11,7 @@ ignored JSONL report). Requires DASHSCOPE_API_KEY in the env. Not committed.
 
 from __future__ import annotations
 
+import argparse
 import json
 import re
 import sys
@@ -32,7 +33,29 @@ from src.thinkpad.manifest import load_manifest  # noqa: E402
 
 _DIAGNOSTIC = ("invalid", "uuid", "configuration", "error", "failure")
 _STOPWORDS = {"the", "a", "an", "for", "assembly", "card", "module", "and", "of", "with", "selected", "models", "only"}
-_LIMIT = int(sys.argv[1]) if len(sys.argv) > 1 else 0  # 0 = all
+
+
+def _parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(description="Live qwen-vl eval for ThinkPad image-only procedure diagrams.")
+    parser.add_argument("legacy_limit", nargs="?", type=int, help="Backward-compatible positional limit.")
+    parser.add_argument("--limit", type=int, default=0, help="Maximum cases to run. 0 means all.")
+    parser.add_argument(
+        "--target",
+        choices=["all", "previous-failures", "recovered-regions"],
+        default="all",
+        help="Optional targeted population for M8.9 residual/no-image checks.",
+    )
+    parser.add_argument(
+        "--previous-report",
+        default="data/eval/m8_7_vision_live_report.jsonl",
+        help="Prior live report used for --target previous-failures.",
+    )
+    parser.add_argument(
+        "--output",
+        default="data/eval/m8_7_vision_live_report.jsonl",
+        help="Ignored JSONL output path.",
+    )
+    return parser.parse_args()
 
 
 def _tokens(name: str) -> set[str]:
@@ -50,6 +73,7 @@ def _name_matches(expected: str, seen: str) -> bool:
 
 
 def main() -> int:
+    args = _parse_args()
     settings = load_settings("config/settings.yaml")
     vision = LLMFactory.create_vision_llm(settings)
     manuals = {m.manual_id: m.local_pdf_path for m in load_manifest("data/manifests/manuals_manifest.yaml")}
@@ -61,14 +85,22 @@ def main() -> int:
                 figs[str(f["image_id"])] = f
     procs = [json.loads(x) for x in Path("data/extracted/m3/fru_procedures.jsonl").read_text(encoding="utf-8").splitlines() if x.strip()]
 
-    sample = [
+    eligible = [
         p for p in procs
         if p.get("presentation_type") == "image_only" and p.get("related_image_ids")
         and not any(t in (p.get("fru_name") or "").lower() for t in _DIAGNOSTIC)
         and len(p["related_image_ids"]) <= 4
     ]
-    if _LIMIT:
-        sample = sample[:_LIMIT]
+    if args.target == "previous-failures":
+        targets = _previous_failures(Path(args.previous_report))
+        sample = [p for p in eligible if (p.get("manual_id"), p.get("fru_id")) in targets]
+    elif args.target == "recovered-regions":
+        sample = [p for p in eligible if any("_region_" in str(image_id) for image_id in p.get("related_image_ids", []))]
+    else:
+        sample = eligible
+    limit = args.limit or args.legacy_limit or 0
+    if limit:
+        sample = sample[:limit]
 
     name_prompt = (
         "This is a service diagram from a laptop hardware manual. In 6 words or fewer, "
@@ -113,7 +145,7 @@ def main() -> int:
         xs = sorted(xs)
         return xs[int(len(xs) * 0.95) - 1] if len(xs) > 1 else (xs[0] if xs else 0)
 
-    print(f"\n=== M8.7 larger live eval: {len(sample)} image_only FRUs (8 manuals) ===")
+    print(f"\n=== ThinkPad vision live eval: target={args.target} n={len(sample)} image_only FRUs ===")
     print(f"reconstruction: non-empty={len(sample)-empty}/{len(sample)} ({100*(len(sample)-empty)//max(len(sample),1)}%)  spec_leaks={leaks}")
     print(f"figure correctness (qwen-vl names returned image == queried FRU): {fig_correct}/{fig_total} ({100*fig_correct//max(fig_total,1)}%)")
     print(f"latency reconstruct: mean={sum(recon_lat)/max(len(recon_lat),1):.1f}s p95={p95(recon_lat):.1f}s")
@@ -123,11 +155,24 @@ def main() -> int:
         if r["fig_ok"] is False:
             print(f"  {r['manual'][:22]} {r['fru_id']} expected='{r['fru_name'][:26]}' seen='{r['fig_seen']}'")
 
-    out = Path("data/eval/m8_7_vision_live_report.jsonl")
+    out = Path(args.output)
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text("\n".join(json.dumps(r, ensure_ascii=False) for r in rows) + "\n", encoding="utf-8")
     print(f"\nper-FRU report (gitignored): {out}")
     return 0
+
+
+def _previous_failures(path: Path) -> set[tuple[str, str]]:
+    targets: set[tuple[str, str]] = set()
+    if not path.exists():
+        return targets
+    for line in path.read_text(encoding="utf-8").splitlines():
+        if not line.strip():
+            continue
+        row = json.loads(line)
+        if row.get("fig_ok") is False:
+            targets.add((row.get("manual"), row.get("fru_id")))
+    return targets
 
 
 if __name__ == "__main__":

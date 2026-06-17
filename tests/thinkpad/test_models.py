@@ -114,7 +114,11 @@ def test_figure_warning_procedure_and_dependency_records_serialize():
         citation=_citation(),
         caption="Base cover screw layout",
         bbox=(1.0, 2.0, 3.0, 4.0),
+        figure_kind="region_crop",
+        source_image_id="fig-page",
     )
+    assert figure.figure_kind == "region_crop"
+    assert figure.source_image_id == "fig-page"
     procedure = FRUProcedure(
         procedure_id="fru-1010",
         manual_id="thinkpad_t14_gen2_p14s_gen2_hmm",

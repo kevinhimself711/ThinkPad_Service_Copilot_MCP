@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import json
+import sys
 from pathlib import Path
+from types import SimpleNamespace
 
 from src.libs.llm.base_vision_llm import ImageInput
 from src.thinkpad import vision_steps as vs
@@ -95,3 +97,147 @@ def test_load_cache_round_trip(tmp_path: Path):
     )
     loaded = vs.load_cache(cache_file)
     assert loaded["k1"] == [{"text": "step"}]
+
+
+def test_render_procedure_images_uses_bbox_clip(monkeypatch):
+    clips = []
+
+    class _Rect:
+        def __init__(self, x0, y0, x1, y1):
+            self.coords = (x0, y0, x1, y1)
+
+    class _Pixmap:
+        def tobytes(self, fmt):
+            assert fmt == "png"
+            return b"png-bytes"
+
+    class _Page:
+        def get_pixmap(self, clip=None):
+            clips.append(clip.coords if clip else None)
+            return _Pixmap()
+
+    class _Doc:
+        page_count = 1
+
+        def __getitem__(self, index):
+            assert index == 0
+            return _Page()
+
+        def close(self):
+            pass
+
+    fake_fitz = SimpleNamespace(Rect=_Rect, open=lambda _: _Doc())
+    monkeypatch.setitem(sys.modules, "fitz", fake_fitz)
+
+    procedure = {"related_image_ids": ["fig_region"]}
+    figures = {
+        "fig_region": {
+            "image_id": "fig_region",
+            "page": 1,
+            "bbox": [10, 20, 300, 420],
+            "figure_kind": "region_crop",
+        }
+    }
+
+    images = vs.render_procedure_images(procedure, figures, "manual.pdf")
+
+    assert len(images) == 1
+    assert images[0].data == b"png-bytes"
+    assert clips == [(10.0, 20.0, 300.0, 420.0)]
+
+
+def test_render_procedure_images_keeps_multiple_regions_on_same_page(monkeypatch):
+    clips = []
+
+    class _Rect:
+        def __init__(self, x0, y0, x1, y1):
+            self.coords = (x0, y0, x1, y1)
+
+    class _Pixmap:
+        def __init__(self, payload):
+            self.payload = payload
+
+        def tobytes(self, fmt):
+            assert fmt == "png"
+            return self.payload
+
+    class _Page:
+        def get_pixmap(self, clip=None):
+            clips.append(clip.coords if clip else None)
+            return _Pixmap(f"png-{len(clips)}".encode())
+
+    class _Doc:
+        page_count = 1
+
+        def __getitem__(self, index):
+            assert index == 0
+            return _Page()
+
+        def close(self):
+            pass
+
+    fake_fitz = SimpleNamespace(Rect=_Rect, open=lambda _: _Doc())
+    monkeypatch.setitem(sys.modules, "fitz", fake_fitz)
+
+    procedure = {"related_image_ids": ["fig_region_a", "fig_region_b"]}
+    figures = {
+        "fig_region_a": {
+            "image_id": "fig_region_a",
+            "page": 1,
+            "bbox": [0, 100, 600, 300],
+            "figure_kind": "region_crop",
+        },
+        "fig_region_b": {
+            "image_id": "fig_region_b",
+            "page": 1,
+            "bbox": [0, 400, 600, 650],
+            "figure_kind": "region_crop",
+        },
+    }
+
+    images = vs.render_procedure_images(procedure, figures, "manual.pdf")
+
+    assert [image.data for image in images] == [b"png-1", b"png-2"]
+    assert clips == [(0.0, 100.0, 600.0, 300.0), (0.0, 400.0, 600.0, 650.0)]
+
+
+def test_render_procedure_images_does_not_clip_embedded_image_bbox(monkeypatch):
+    clips = []
+
+    class _Pixmap:
+        def tobytes(self, fmt):
+            assert fmt == "png"
+            return b"png"
+
+    class _Page:
+        def get_pixmap(self, clip=None):
+            clips.append(clip)
+            return _Pixmap()
+
+    class _Doc:
+        page_count = 1
+
+        def __getitem__(self, index):
+            assert index == 0
+            return _Page()
+
+        def close(self):
+            pass
+
+    fake_fitz = SimpleNamespace(Rect=lambda *args: args, open=lambda _: _Doc())
+    monkeypatch.setitem(sys.modules, "fitz", fake_fitz)
+
+    procedure = {"related_image_ids": ["embedded"]}
+    figures = {
+        "embedded": {
+            "image_id": "embedded",
+            "page": 1,
+            "bbox": [10, 20, 300, 420],
+            "figure_kind": "embedded_image",
+        }
+    }
+
+    images = vs.render_procedure_images(procedure, figures, "manual.pdf")
+
+    assert len(images) == 1
+    assert clips == [None]

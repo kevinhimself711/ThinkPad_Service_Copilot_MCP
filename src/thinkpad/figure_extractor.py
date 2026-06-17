@@ -59,6 +59,7 @@ def extract_figure_records(
                         storage_uri=storage_uri,
                         source_url=manual.source_url,
                         bbox=bbox,
+                        figure_kind="embedded_image",
                     )
                 )
 
@@ -77,6 +78,7 @@ def extract_figure_records(
                         surrounding_text=surrounding_text,
                         storage_uri=storage_uri,
                         source_url=manual.source_url,
+                        figure_kind="page_raster",
                     )
                 )
     finally:

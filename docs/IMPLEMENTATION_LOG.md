@@ -1752,3 +1752,91 @@ sharing a page get their own figure instead of inheriting the dominant neighbor'
 ### Handoff
 
 M8.9 should be treated as the recommended next milestone before M9 packaging unless the residual M8.8 figure-region risk is explicitly accepted. M9 demo/interview claims must describe image-only procedures as cited diagram evidence plus structured table facts, with optional unverified qwen-vl assistance, not as authoritative extracted text steps.
+
+---
+
+## M8.9 Figure-Region Cropping
+
+- Date: 2026-06-17
+- User goal: implement M8.9 for real, including figure-region cropping, extraction refresh, local regression, DashScope live evaluation, reports, commit, and push.
+- Result: complete with risk. M8.9 improves image evidence coverage but misses the planned >93% live figure-correctness target.
+- Canonical report: `docs/M8_9_FIGURE_REGION_REPORT.md`
+
+### File-Level Changes
+
+| Change | Path | Implementation Fact |
+|---|---|---|
+| Modified | `src/thinkpad/models.py` | Added `FigureRecord.figure_kind` and `FigureRecord.source_image_id`; validates known figure kinds including `embedded_image`, `page_raster`, `region_crop`, and `unknown`. |
+| Modified | `src/thinkpad/figure_extractor.py` | Marks embedded images as `embedded_image` and raster fallback page images as `page_raster`. |
+| Modified | `src/thinkpad/fru_extractor.py` | Generates `region_crop` figure records from FRU heading y-bands, drawing bands, page dimensions, and continuation-page logic; excludes diagnostic pseudo-FRUs; keeps native embedded/page-raster evidence ahead of region crops after live regression showed crop-first was harmful. |
+| Modified | `src/thinkpad/vision_steps.py` | Renders each related figure separately; uses PyMuPDF `clip` only for `region_crop`; does not clip embedded-image bboxes. |
+| Modified | `src/thinkpad/tool_service.py` | Exposes `figure_kind` and `source_image_id` in figure evidence payloads. |
+| Modified | `scripts/thinkpad_vision_live_eval.py` | Added CLI arguments including `--target all\|previous-failures\|recovered-regions`, `--previous-report`, and `--output`. |
+| Modified | `tests/thinkpad/test_figure_extractor.py` | Added region-crop shared-page, continuation, pseudo-FRU skip, and native-priority coverage. |
+| Modified | `tests/thinkpad/test_models.py` | Added `FigureRecord` serialization/validation coverage for new fields. |
+| Modified | `tests/thinkpad/test_vision_steps.py` | Added clip rendering, multiple-region same-page rendering, and embedded-image no-clip regression coverage. |
+| Added | `docs/M8_9_FIGURE_REGION_REPORT.md` | Records implementation, live rounds, target miss, failure grouping, and M8.10/M9 decision. |
+
+### Extraction Results
+
+Local ignored extraction was regenerated under `data/extracted/m3`.
+
+| Metric | Value |
+|---|---:|
+| Figure records | 1420 |
+| Embedded-image figures | 694 |
+| Page-raster figures | 591 |
+| Region-crop figures | 135 |
+| FRU procedures | 213 |
+| Image-only procedures | 194 |
+| Image-only procedures with images | 186 |
+| Image-only procedures with no image | 8 |
+| Image-only procedures with region-linked images | 98 |
+
+### Live Evaluation Results
+
+All DashScope runs used `DASHSCOPE_API_KEY` only as a transient environment
+variable. No provider output, API key, local images, PDFs, or `data/` artifacts
+are committed.
+
+| Run | Population | Correct | Rate | Non-empty | Spec leaks | Finding |
+|---|---:|---:|---:|---:|---:|---|
+| Smoke | 10 | n/a | n/a | 10/10 | 0 | Provider reachable; guard held |
+| Full crop-first | 167 | 97 | 58% | 166/167 | 0 | Regressed due to embedded-image clipping and crop-first ordering |
+| Full after clip fix | 167 | 134 | 80% | 167/167 | 0 | Embedded images retain context |
+| Targeted regions before final ordering | 91 | 69 | 75% | 91/91 | 0 | Region crops useful but not safe as first choice |
+| Final full | 167 | 147 | 88% | 167/167 | 0 | Native-first ordering best observed full result |
+| Final targeted regions | 91 | 82 | 90% | 91/91 | 0 | Region-linked subset still has residual failures |
+
+Final full live failures: 20 total, grouped as 12 fine-grained component-name
+mismatches, 4 neighbor large-assembly mismatches, and 4 neighbor battery or
+large-part mismatches.
+
+### Validation
+
+| Command | Result |
+|---|---|
+| `python -m pytest tests\thinkpad\test_figure_extractor.py tests\thinkpad\test_fru_extractor.py tests\thinkpad\test_tool_service.py tests\thinkpad\test_agent.py tests\thinkpad\test_vision_steps.py -q` | Passed, 56 tests. |
+| `python -m pytest tests\thinkpad -q -m "not llm"` | Passed, 145 tests. |
+| `python scripts\thinkpad_agent_evaluate.py --golden-set tests\fixtures\thinkpad_m8_2_reality_golden_set.json --manifest data\manifests\manuals_manifest.yaml --extracted-dir data\extracted\m3 --collection thinkpad_m4 --mode deterministic --strict-citation --output data\eval\m8_9_120_det_strict_final.json` | 120 cases, 0 failed, pass rate 1.0. |
+| `ruff check src\thinkpad scripts\thinkpad_*.py tests\thinkpad` | Passed. |
+| `git diff --check` | Passed with Git CRLF warnings only. |
+
+### Deviations And Risks
+
+- M8.9 missed the planned >93% figure-correctness target. Final full live rate is
+  147/167 (88%); final targeted region rate is 82/91 (90%).
+- Correct count improved from the M8.8 baseline (133 to 147), and zero-image
+  image-only FRUs dropped from 31 to 8, but this is not a clean percentage gain
+  because the live population changed from 148 to 167.
+- Region crops should remain recovery/additional evidence rather than
+  unconditional first-choice evidence until crop precision improves.
+- qwen-vl `vision_steps` remain unverified and must not supply exact specs,
+  torque values, screw counts, FRU IDs, or safety facts.
+
+### Handoff
+
+Next milestone should be M8.10 crop precision remediation if the goal is quality
+improvement before packaging. M9 packaging is acceptable only if it explicitly
+documents the M8.9 88% full-live figure-correctness boundary and does not present
+diagram selection as solved.

@@ -2308,3 +2308,193 @@ open-world figure-match rate on the M8.8 population (NOT 1.0, NOT a like-for-lik
 delta on 171). Residual mismatches documented as the cropping problem. The per-FRU
 report (now M8.8 data) is at gitignored `data/eval/m8_7_vision_live_report.jsonl`.
 DASHSCOPE key was exposed in chat again and must be rotated.
+
+## M8.9-001: Figure-Region Cropping Extraction Refresh
+
+Date: 2026-06-17
+
+Motivation: M8.8 left 31 image-only FRUs with no attributed image and 15 live
+figure mismatches. M8.9 tests whether sub-page region-crop figure evidence can
+recover shared-page/small-part diagrams without fabricating textual steps.
+
+Command:
+
+```powershell
+python scripts/thinkpad_extract_hmm.py --manifest data\manifests\manuals_manifest.yaml --output-dir data\extracted\m3
+```
+
+Result:
+
+| Metric | Value |
+|---|---:|
+| Figure records | 1420 |
+| Embedded-image figures | 694 |
+| Page-raster figures | 591 |
+| Region-crop figures | 135 |
+| FRU procedures | 213 |
+| Image-only procedures | 194 |
+| Image-only procedures with images | 186 |
+| Image-only procedures with no image | 8 |
+| Image-only procedures with region-linked images | 98 |
+
+Decision: M8.9 materially improves evidence coverage. The quality question must
+be answered by live figure correctness, not by coverage alone.
+
+## M8.9-002: Live Smoke
+
+Command:
+
+```powershell
+DASHSCOPE_API_KEY=*** python scripts/thinkpad_vision_live_smoke.py 10
+```
+
+Result:
+
+| Metric | Value |
+|---|---:|
+| Reconstruction non-empty | 10 / 10 |
+| Spec leaks | 0 |
+| Latency mean | 2.1 s |
+| Latency p95 | 2.5 s |
+
+Decision: qwen-vl remained reachable and the spec-leak guard held before full
+live evaluation.
+
+## M8.9-003: Full Live Eval, Crop-First Attempt
+
+Command:
+
+```powershell
+DASHSCOPE_API_KEY=*** python scripts/thinkpad_vision_live_eval.py --output data\eval\m8_9_vision_live_full.jsonl
+```
+
+Result:
+
+| Metric | Value |
+|---|---:|
+| Population | 167 |
+| Figure-correct | 97 / 167 |
+| Figure correctness | 58% |
+| Reconstruction non-empty | 166 / 167 |
+| Spec leaks | 0 |
+
+Interpretation: this was a useful failure. Crop-first ordering and clipping
+embedded-image bboxes displaced stable native figures and removed context from
+embedded diagrams. M8.9 could not stop here.
+
+## M8.9-004: Full Live Eval After Embedded Clip Fix
+
+Command:
+
+```powershell
+DASHSCOPE_API_KEY=*** python scripts/thinkpad_vision_live_eval.py --output data\eval\m8_9_vision_live_full_after_clip_fix.jsonl
+```
+
+Result:
+
+| Metric | Value |
+|---|---:|
+| Population | 167 |
+| Figure-correct | 134 / 167 |
+| Figure correctness | 80% |
+| Reconstruction non-empty | 167 / 167 |
+| Spec leaks | 0 |
+
+Decision: embedded images must not be clipped. Region crops should be clipped;
+embedded images should retain full rendered page context.
+
+## M8.9-005: Targeted Region Eval Before Final Ordering
+
+Command:
+
+```powershell
+DASHSCOPE_API_KEY=*** python scripts/thinkpad_vision_live_eval.py --target recovered-regions --output data\eval\m8_9_vision_live_targeted_regions.jsonl
+```
+
+Result:
+
+| Metric | Value |
+|---|---:|
+| Population | 91 |
+| Figure-correct | 69 / 91 |
+| Figure correctness | 75% |
+| Reconstruction non-empty | 91 / 91 |
+| Spec leaks | 0 |
+
+Decision: region crops recovered image availability but were not safe as
+unconditional first-choice evidence.
+
+## M8.9-006: Final Full Live Eval
+
+Command:
+
+```powershell
+DASHSCOPE_API_KEY=*** python scripts/thinkpad_vision_live_eval.py --output data\eval\m8_9_vision_live_full_final.jsonl
+```
+
+Change before this run: native `embedded_image` and `page_raster` evidence was
+prioritized ahead of `region_crop`; region crops remained as additional/recovery
+evidence.
+
+Result:
+
+| Metric | Value |
+|---|---:|
+| Population | 167 |
+| Figure-correct | 147 / 167 |
+| Figure correctness | 88% |
+| Reconstruction non-empty | 167 / 167 |
+| Spec leaks | 0 |
+| Reconstruction latency mean / p95 | 2.9 s / 5.2 s |
+| Name-check latency mean / p95 | 1.5 s / 2.0 s |
+
+Decision: M8.9 improved correct count and coverage but missed the >93% target.
+Record it as complete with risk, not as a clean pass.
+
+## M8.9-007: Final Targeted Region Eval
+
+Command:
+
+```powershell
+DASHSCOPE_API_KEY=*** python scripts/thinkpad_vision_live_eval.py --target recovered-regions --output data\eval\m8_9_vision_live_targeted_regions_final.jsonl
+```
+
+Result:
+
+| Metric | Value |
+|---|---:|
+| Population | 91 |
+| Figure-correct | 82 / 91 |
+| Figure correctness | 90% |
+| Reconstruction non-empty | 91 / 91 |
+| Spec leaks | 0 |
+
+Decision: targeted region evidence is useful, but the residual 9/91 failures
+show that vertical crop bands are not enough for all small/shared-page
+components.
+
+## M8.9-008: Regression Tests And Lint
+
+Commands:
+
+```powershell
+python -m pytest tests\thinkpad\test_figure_extractor.py tests\thinkpad\test_fru_extractor.py tests\thinkpad\test_tool_service.py tests\thinkpad\test_agent.py tests\thinkpad\test_vision_steps.py -q
+python -m pytest tests\thinkpad -q -m "not llm"
+python scripts\thinkpad_agent_evaluate.py --golden-set tests\fixtures\thinkpad_m8_2_reality_golden_set.json --manifest data\manifests\manuals_manifest.yaml --extracted-dir data\extracted\m3 --collection thinkpad_m4 --mode deterministic --strict-citation --output data\eval\m8_9_120_det_strict_final.json
+ruff check src\thinkpad scripts\thinkpad_*.py tests\thinkpad
+git diff --check
+```
+
+Result:
+
+| Check | Result |
+|---|---|
+| Focused pytest | 56 passed |
+| Full ThinkPad non-LLM pytest | 145 passed |
+| 120-case deterministic strict | 120 cases, 0 failed, pass rate 1.0 |
+| Ruff | Passed |
+| `git diff --check` | Passed with Git CRLF warnings only |
+
+Decision: M8.9 is safe to commit as complete with risk. The next quality
+milestone should be M8.10 crop precision remediation unless M9 explicitly accepts
+the M8.9 88% full-live figure boundary.

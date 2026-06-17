@@ -922,3 +922,73 @@ a few adjacent large-assembly bleeds — these need sub-page image cropping, whi
 is out of M8.8 scope (the acceptance bar was ≥85%, not 100%). No regression:
 120-case deterministic strict = 0 failed / 1.0; `pytest tests/thinkpad` 139
 passed. The DASHSCOPE key was exposed in chat again and must be rotated.
+
+## M8.9 Figure-Region Cropping Baseline
+
+Date: 2026-06-17
+
+M8.9 implements sub-page region-crop figure evidence for image-only procedures.
+It is a real code and live-evaluation milestone, not a docs-only status update.
+The change improves image coverage but does not meet the planned >93% live
+figure-correctness target.
+
+### Implementation And Extraction
+
+| Metric | M8.8 | M8.9 |
+|---|---:|---:|
+| Image-only FRU procedures | 194 | 194 |
+| Image-only FRUs with at least one image | 163 | 186 |
+| Image-only FRUs with no attributed image | 31 | 8 |
+| Region-crop figures | n/a | 135 |
+| Total figure records | n/a | 1420 |
+
+M8.9 adds `figure_kind` and `source_image_id` metadata, generates
+`region_crop` records from FRU heading bands and drawing bands, and renders only
+region crops with a PyMuPDF clip. Embedded-image bboxes are not clipped because
+the first live run showed that clipping embedded images regressed figure naming.
+
+### Live Evaluation
+
+| Run | Population | Correct | Rate | Non-empty | Spec leaks | Interpretation |
+|---|---:|---:|---:|---:|---:|---|
+| M8.8 baseline | 148 | 133 | 89% | 148/148 | 0 | Within-page y-position attribution |
+| M8.9 first crop-first full run | 167 | 97 | 58% | 166/167 | 0 | Regressed; region crops displaced stable native figures and embedded images were clipped |
+| M8.9 full after embedded clip fix | 167 | 134 | 80% | 167/167 | 0 | Embedded images kept full context |
+| M8.9 final full run | 167 | 147 | 88% | 167/167 | 0 | Native figures prioritized; region crops retained as recovery evidence |
+| M8.9 final targeted region run | 91 | 82 | 90% | 91/91 | 0 | Region-linked image-only procedures |
+
+This is not a clean win on percentage: final full correctness is 88%, below the
+M8.8 bounded percentage of 89% and below the planned >93% target. It is still a
+coverage improvement because the evaluated population grew from 148 to 167,
+correct figures increased from 133 to 147, and zero-image image-only FRUs dropped
+from 31 to 8.
+
+### Remaining Failures
+
+The final full live run has 20 mismatches:
+
+- 12 fine-grained component-name mismatches.
+- 4 neighbor large-assembly mismatches.
+- 4 neighbor battery or large-part mismatches.
+
+Representative cases include system board seen as keyboard, I/O bracket seen as
+wireless WAN card, coin-cell battery seen as speaker assembly, pen charger or
+holder seen as nearby internal components, memory shield seen as M.2 SSD, and
+eDP cable seen as display assembly.
+
+### Regression
+
+| Check | Result |
+|---|---|
+| Focused M8.9 tests | 56 passed |
+| Full ThinkPad non-LLM suite | 145 passed |
+| 120-case deterministic strict regression | 120 cases, 0 failed, pass rate 1.0 |
+| Ruff | Passed |
+| `git diff --check` | Passed with Git CRLF warnings only |
+
+### Decision
+
+M8.9 is complete with risk. The system should not claim diagram selection is
+solved or >93% accurate. The next step is either M8.10 crop precision remediation
+for the remaining mismatch classes, or M9 packaging with this 88% full-live
+figure-correctness boundary explicitly accepted.
