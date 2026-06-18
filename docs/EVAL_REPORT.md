@@ -992,3 +992,50 @@ M8.9 is complete with risk. The system should not claim diagram selection is
 solved or >93% accurate. The next step is either M8.10 crop precision remediation
 for the remaining mismatch classes, or M9 packaging with this 88% full-live
 figure-correctness boundary explicitly accepted.
+
+## M8.10 Crop Precision Remediation Attempt
+
+Date: 2026-06-18
+
+M8.10 attempted to improve the M8.9 residual figure-correctness failures by
+adding x/y drawing-rect crop candidates and primary-image diagnostics. It did
+not meet the planned `>=93%` gate.
+
+### Extraction And Coverage
+
+| Metric | M8.9 | M8.10 |
+|---|---:|---:|
+| Figure records | 1420 | 1550 |
+| Embedded-image figures | 694 | 694 |
+| Page-raster figures | 591 | 591 |
+| Region-crop figures | 135 | 135 |
+| Precise region-crop figures | 0 | 130 |
+| Image-only procedures with images | 186/194 | 186/194 |
+| Image-only procedures with no image | 8 | 8 |
+
+M8.10 preserved M8.9 image coverage but did not improve it.
+
+### Live Evaluation
+
+The qwen-vl figure name-check scorer is unchanged from M8.8/M8.9.
+
+| Run | Population | Correct | Rate | Non-empty | Spec leaks | Interpretation |
+|---|---:|---:|---:|---:|---:|---|
+| M8.9 final full baseline | 167 | 147 | 88% | 167/167 | 0 | Baseline |
+| M8.10 experimental selector full | 167 | 135 | 80% | 166/167 | 0 | Regressed; disabled |
+| M8.10 final old-failure target | 20 | 0 | 0% | 20/20 | 0 | Old residuals remain |
+| M8.10 final targeted regions | 91 | 82 | 90% | 91/91 | 0 | Same as M8.9 targeted |
+| M8.10 final full stable | 167 | 147 | 88% | 167/167 | 0 | Same as M8.9 full |
+
+### Decision
+
+M8.10 is a useful negative result, not a successful quality gate. Blindly
+promoting region crops as primary evidence reduces correctness. The default
+behavior remains native-first with region crops as additional evidence. Do not
+enter M9 as a clean quality pass unless the 147/167 (88%) full-live
+figure-correctness boundary is explicitly accepted.
+
+Recommended next milestone: M8.11 residual visual ownership remediation using
+the M8.10 residual crop review pack to classify wrong-neighbor crops, ambiguous
+shared drawings, scorer false negatives, and missing crop cases before making
+more extraction changes.

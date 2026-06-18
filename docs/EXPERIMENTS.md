@@ -2498,3 +2498,168 @@ Result:
 Decision: M8.9 is safe to commit as complete with risk. The next quality
 milestone should be M8.10 crop precision remediation unless M9 explicitly accepts
 the M8.9 88% full-live figure boundary.
+
+## M8.10-001: Crop Precision Extraction Refresh
+
+Command:
+
+```powershell
+python scripts\thinkpad_extract_hmm.py --manifest data\manifests\manuals_manifest.yaml --output-dir data\extracted\m3
+```
+
+Result:
+
+| Metric | Value |
+|---|---:|
+| Figure records | 1550 |
+| Embedded-image figures | 694 |
+| Page-raster figures | 591 |
+| Region-crop figures | 135 |
+| Precise region-crop figures | 130 |
+| FRU procedures | 213 |
+| Image-only procedures | 194 |
+| Image-only procedures with images | 186 |
+| Image-only procedures with no image | 8 |
+| Image-only procedures with region-linked images | 98 |
+
+Decision: precise crop candidates were generated without reducing M8.9 coverage.
+
+## M8.10-002: Residual Crop Review Pack
+
+Command:
+
+```powershell
+python scripts\thinkpad_prepare_crop_review.py --extracted-dir data\extracted\m3 --output data\eval\m8_10_residual_crop_review.json --markdown-output data\eval\m8_10_residual_crop_review.md
+```
+
+Result: 27 metadata-only review cases were written under ignored `data/eval/`.
+
+Decision: human visual classification is needed before M8.11. The review pack is
+not a gold set and does not contain PDF images or manual text.
+
+## M8.10-003: Live Smoke
+
+Command:
+
+```powershell
+DASHSCOPE_API_KEY=*** python scripts\thinkpad_vision_live_smoke.py 10
+```
+
+Result:
+
+| Metric | Value |
+|---|---:|
+| Reconstruction non-empty | 10 / 10 |
+| Spec leaks | 0 |
+| Latency mean | 2.5 s |
+| Latency p95 | 2.9 s |
+
+Decision: provider path and spec-leak guard were clean before full runs.
+
+## M8.10-004: Experimental Selector Full Live Run
+
+Command:
+
+```powershell
+DASHSCOPE_API_KEY=*** python scripts\thinkpad_vision_live_eval.py --output data\eval\m8_10_vision_live_full_final.jsonl
+```
+
+Result:
+
+| Metric | Value |
+|---|---:|
+| Population | 167 |
+| Figure-correct | 135 / 167 |
+| Figure correctness | 80% |
+| Reconstruction non-empty | 166 / 167 |
+| Spec leaks | 0 |
+
+Decision: failed experiment. Region promotion displaced stable native evidence.
+The selector was changed back to stable native-first behavior before final runs.
+
+## M8.10-005: Final Old M8.9 Failure Target
+
+Command:
+
+```powershell
+DASHSCOPE_API_KEY=*** python scripts\thinkpad_vision_live_eval.py --target m8-9-failures --output data\eval\m8_10_vision_live_m8_9_failures_stable_v2.jsonl
+```
+
+Result:
+
+| Metric | Value |
+|---|---:|
+| Population | 20 |
+| Figure-correct | 0 / 20 |
+| Figure correctness | 0% |
+| Reconstruction non-empty | 20 / 20 |
+| Spec leaks | 0 |
+
+Decision: M8.10 did not fix the old residual mismatch set.
+
+## M8.10-006: Final Targeted Region Run
+
+Command:
+
+```powershell
+DASHSCOPE_API_KEY=*** python scripts\thinkpad_vision_live_eval.py --target recovered-regions --output data\eval\m8_10_vision_live_targeted_regions_stable_v2.jsonl
+```
+
+Result:
+
+| Metric | Value |
+|---|---:|
+| Population | 91 |
+| Figure-correct | 82 / 91 |
+| Figure correctness | 90% |
+| Reconstruction non-empty | 91 / 91 |
+| Spec leaks | 0 |
+
+Decision: final targeted region performance equals M8.9. Precise crop candidates
+did not improve the region-linked subset.
+
+## M8.10-007: Final Full Live Run
+
+Command:
+
+```powershell
+DASHSCOPE_API_KEY=*** python scripts\thinkpad_vision_live_eval.py --output data\eval\m8_10_vision_live_full_stable_v2.jsonl
+```
+
+Result:
+
+| Metric | Value |
+|---|---:|
+| Population | 167 |
+| Figure-correct | 147 / 167 |
+| Figure correctness | 88% |
+| Reconstruction non-empty | 167 / 167 |
+| Spec leaks | 0 |
+| Reconstruction latency mean / p95 | 2.3 s / 3.3 s |
+| Name-check latency mean / p95 | 1.5 s / 1.8 s |
+
+Decision: final M8.10 preserves the M8.9 full-live boundary but does not improve
+it. M8.10 is not a pass for the planned `>=93%` crop-precision gate.
+
+## M8.10-008: Regression Tests And Lint
+
+Commands:
+
+```powershell
+python -m pytest tests\thinkpad\test_figure_extractor.py tests\thinkpad\test_vision_steps.py tests\thinkpad\test_models.py -q
+python -m pytest tests\thinkpad -q -m "not llm" --basetemp data\tmp\pytest_m8_10
+python scripts\thinkpad_agent_evaluate.py --golden-set tests\fixtures\thinkpad_m8_2_reality_golden_set.json --manifest data\manifests\manuals_manifest.yaml --extracted-dir data\extracted\m3 --collection thinkpad_m4 --mode deterministic --strict-citation --output data\eval\m8_10_120_det_strict_final.json
+ruff check src\thinkpad scripts\thinkpad_*.py tests\thinkpad
+```
+
+Result:
+
+| Check | Result |
+|---|---|
+| Focused pytest | 28 passed |
+| Full ThinkPad non-LLM pytest | 149 passed |
+| 120-case deterministic strict | 120 cases, 0 failed, pass rate 1.0 |
+| Ruff | Passed |
+
+Decision: M8.10 is safe as a non-regressing diagnostic change, but it should not
+be treated as a successful precision remediation.

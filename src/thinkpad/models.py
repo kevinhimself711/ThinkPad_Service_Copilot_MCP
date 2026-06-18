@@ -35,6 +35,7 @@ _FIGURE_KINDS = frozenset(
         "embedded_image",
         "page_raster",
         "region_crop",
+        "region_crop_precise",
         "unknown",
     }
 )
@@ -72,6 +73,9 @@ class HMMPage:
     # Drawing vertical coverage as (y0, y1) bands, used to find which heading
     # band holds the bulk of the page's line-art.
     drawing_bands: list[tuple[float, float]] = field(default_factory=list)
+    # Full drawing rectangles as (x0,y0,x1,y1), used for M8.10 crop precision.
+    # Kept alongside drawing_bands for backward-compatible attribution logic.
+    drawing_rects: list[tuple[float, float, float, float]] = field(default_factory=list)
     # Embedded-image bounding boxes aligned with image_xrefs order (x0,y0,x1,y1),
     # so a figure's within-page y can be compared to FRU heading bands.
     image_bboxes: list[tuple[float, float, float, float]] = field(default_factory=list)

@@ -22,6 +22,14 @@ VISION_STEP_KIND = "vision_removal_step"
 VISION_CITATION_SOURCE = "qwen_vl_unverified"
 _MAX_VISION_STEPS = 12
 _DEFAULT_CACHE_PATH = Path("data/extracted/m3/vision_steps.jsonl")
+_SELECTION_VERSION = "m8_10_stable_primary_v2"
+_PRECISION_COMPONENT_RE = re.compile(
+    r"\b("
+    r"coin[- ]cell|bracket|pen charger|pen holder|nfc|memory|edp|antenna|hinge|"
+    r"keyboard bezel|earbuds|system board|i/o|rj45"
+    r")\b",
+    re.I,
+)
 
 # Reject any reconstructed step that leaks an exact spec the LLM must not be the
 # source of truth for (torque / screw counts / FRU IDs). AGENTS.md 18.
@@ -55,12 +63,7 @@ def render_procedure_images(
     of the whole shared FRU page.
     """
 
-    related = procedure.get("related_image_ids") or []
-    render_jobs: list[dict[str, Any]] = []
-    for image_id in related:
-        figure = figures_by_id.get(image_id)
-        if figure and isinstance(figure.get("page"), int):
-            render_jobs.append(figure)
+    render_jobs = _ordered_render_jobs(procedure, figures_by_id)
     if not render_jobs:
         return []
 
@@ -76,7 +79,7 @@ def render_procedure_images(
             page_number = int(figure["page"])
             if page_number < 1 or page_number > doc.page_count:
                 continue
-            should_clip = figure.get("figure_kind") == "region_crop"
+            should_clip = figure.get("figure_kind") in {"region_crop", "region_crop_precise"}
             bbox = figure.get("bbox") if should_clip and isinstance(figure.get("bbox"), (list, tuple)) else None
             clip = None
             if bbox and len(bbox) == 4:
@@ -86,6 +89,128 @@ def render_procedure_images(
     finally:
         doc.close()
     return images
+
+
+def select_primary_figure(
+    procedure: dict[str, Any],
+    figures_by_id: dict[str, dict[str, Any]],
+) -> dict[str, Any] | None:
+    """Choose the first image sent to qwen-vl without changing evidence payloads."""
+
+    jobs = _related_figures(procedure, figures_by_id)
+    if not jobs:
+        return None
+    has_exact_region = any(_same_fru(procedure, figure) and _is_region_crop(figure) for figure in jobs)
+    return max(
+        enumerate(jobs),
+        key=lambda item: (_figure_score(procedure, item[1], has_exact_region), -item[0]),
+    )[1]
+
+
+def primary_figure_metadata(
+    procedure: dict[str, Any],
+    figures_by_id: dict[str, dict[str, Any]],
+) -> dict[str, Any]:
+    figure = select_primary_figure(procedure, figures_by_id)
+    if figure is None:
+        return {}
+    related = procedure.get("related_image_ids") or []
+    has_exact_region = any(_same_fru(procedure, candidate) and _is_region_crop(candidate) for candidate in _related_figures(procedure, figures_by_id))
+    return {
+        "primary_image_id": figure.get("image_id"),
+        "primary_index": related.index(figure.get("image_id")) if figure.get("image_id") in related else None,
+        "primary_figure_kind": figure.get("figure_kind") or "unknown",
+        "primary_page": figure.get("page"),
+        "primary_bbox": figure.get("bbox"),
+        "primary_source_image_id": figure.get("source_image_id"),
+        "primary_selection_score": _figure_score(procedure, figure, has_exact_region),
+        "primary_selection_reason": _selection_reason(procedure, figure, has_exact_region),
+    }
+
+
+def _ordered_render_jobs(
+    procedure: dict[str, Any],
+    figures_by_id: dict[str, dict[str, Any]],
+) -> list[dict[str, Any]]:
+    jobs = _related_figures(procedure, figures_by_id)
+    primary = select_primary_figure(procedure, figures_by_id)
+    if primary is None:
+        return jobs
+    primary_id = primary.get("image_id")
+    return [primary, *[figure for figure in jobs if figure.get("image_id") != primary_id]]
+
+
+def _related_figures(
+    procedure: dict[str, Any],
+    figures_by_id: dict[str, dict[str, Any]],
+) -> list[dict[str, Any]]:
+    figures: list[dict[str, Any]] = []
+    for image_id in procedure.get("related_image_ids") or []:
+        figure = figures_by_id.get(image_id)
+        if figure and isinstance(figure.get("page"), int):
+            figures.append(figure)
+    return figures
+
+
+def _figure_score(
+    procedure: dict[str, Any],
+    figure: dict[str, Any],
+    _has_exact_region: bool,
+) -> int:
+    kind = figure.get("figure_kind") or "unknown"
+    score = {
+        "embedded_image": 90,
+        "page_raster": 70,
+        "region_crop": 65,
+        "region_crop_precise": 55,
+        "unknown": 20,
+    }.get(kind, 20)
+    if _same_fru(procedure, figure):
+        score += 20
+    if kind == "region_crop_precise":
+        score += _crop_tightness_bonus(figure)
+    return score
+
+
+def _selection_reason(
+    procedure: dict[str, Any],
+    figure: dict[str, Any],
+    has_exact_region: bool,
+) -> str:
+    parts = [figure.get("figure_kind") or "unknown"]
+    if _same_fru(procedure, figure):
+        parts.append("same_fru")
+    if _is_precision_component(procedure):
+        parts.append("precision_component")
+    if has_exact_region:
+        parts.append("has_exact_region")
+    return "+".join(parts)
+
+
+def _same_fru(procedure: dict[str, Any], figure: dict[str, Any]) -> bool:
+    return str(figure.get("related_fru_id") or "") == str(procedure.get("fru_id") or "")
+
+
+def _is_region_crop(figure: dict[str, Any]) -> bool:
+    return figure.get("figure_kind") in {"region_crop", "region_crop_precise"}
+
+
+def _is_precision_component(procedure: dict[str, Any]) -> bool:
+    return bool(_PRECISION_COMPONENT_RE.search(str(procedure.get("fru_name") or "")))
+
+
+def _crop_tightness_bonus(figure: dict[str, Any]) -> int:
+    bbox = figure.get("bbox")
+    if not isinstance(bbox, (list, tuple)) or len(bbox) != 4:
+        return 0
+    width = max(0.0, float(bbox[2]) - float(bbox[0]))
+    height = max(0.0, float(bbox[3]) - float(bbox[1]))
+    area = width * height
+    if area <= 80_000:
+        return 10
+    if area <= 160_000:
+        return 5
+    return 0
 
 
 def _parse_step_lines(content: str) -> list[str]:
@@ -154,7 +279,7 @@ def reconstruct_steps(
 
 def _cache_key(procedure: dict[str, Any]) -> str:
     related = sorted(str(i) for i in (procedure.get("related_image_ids") or []))
-    return f"{procedure.get('procedure_id')}|{','.join(related)}"
+    return f"{_SELECTION_VERSION}|{procedure.get('procedure_id')}|{','.join(related)}"
 
 
 def load_cache(cache_path: str | Path = _DEFAULT_CACHE_PATH) -> dict[str, list[dict[str, Any]]]:

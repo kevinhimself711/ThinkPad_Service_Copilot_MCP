@@ -55,7 +55,8 @@ def load_hmm_pages(
                 drawing_count = 0
 
             fru_headings = _page_fru_headings(page)
-            drawing_bands = _page_drawing_bands(page)
+            drawing_rects = _page_drawing_rects(page)
+            drawing_bands = [(y0, y1) for _, y0, _, y1 in drawing_rects]
             image_bboxes = _page_image_bboxes(page, image_xrefs)
 
             table_blocks: list[list[list[str]]] = []
@@ -84,6 +85,7 @@ def load_hmm_pages(
                     image_xrefs=image_xrefs,
                     fru_headings=fru_headings,
                     drawing_bands=drawing_bands,
+                    drawing_rects=drawing_rects,
                     image_bboxes=image_bboxes,
                 )
             )
@@ -116,28 +118,28 @@ def _page_fru_headings(page: object) -> list[tuple[float, str]]:
     return headings
 
 
-def _page_drawing_bands(page: object) -> list[tuple[float, float]]:
-    """Return (y0, y1) vertical extents of vector drawings on the page.
+def _page_drawing_rects(page: object) -> list[tuple[float, float, float, float]]:
+    """Return (x0, y0, x1, y1) extents of vector drawings on the page.
 
     Aggregated per drawing rect (not per primitive) to keep memory bounded on
-    dense line-art pages. Used to find which heading band holds the bulk of the
-    page's diagram content.
+    dense line-art pages. M8.8 used the vertical projection; M8.10 preserves x
+    extents so shared-page crops can be narrower than a full page-width band.
     """
 
-    bands: list[tuple[float, float]] = []
+    rects: list[tuple[float, float, float, float]] = []
     try:
         drawings = page.get_drawings()  # type: ignore[attr-defined]
     except Exception:
-        return bands
+        return rects
     for drawing in drawings:
         rect = drawing.get("rect")
         if rect is None:
             continue
         try:
-            bands.append((float(rect.y0), float(rect.y1)))
+            rects.append((float(rect.x0), float(rect.y0), float(rect.x1), float(rect.y1)))
         except Exception:
             continue
-    return bands
+    return rects
 
 
 def _page_image_bboxes(

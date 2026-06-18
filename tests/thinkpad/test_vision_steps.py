@@ -87,7 +87,7 @@ def test_get_or_reconstruct_caches_and_skips_second_call(tmp_path: Path, monkeyp
     assert vision.calls == 1
     # cache persisted to disk
     rows = [json.loads(line) for line in cache_file.read_text(encoding="utf-8").splitlines() if line.strip()]
-    assert rows and rows[0]["key"].startswith("m_fru_1070|")
+    assert rows and rows[0]["key"].startswith("m8_10_stable_primary_v2|m_fru_1070|")
 
 
 def test_load_cache_round_trip(tmp_path: Path):
@@ -135,7 +135,7 @@ def test_render_procedure_images_uses_bbox_clip(monkeypatch):
             "image_id": "fig_region",
             "page": 1,
             "bbox": [10, 20, 300, 420],
-            "figure_kind": "region_crop",
+            "figure_kind": "region_crop_precise",
         }
     }
 
@@ -241,3 +241,96 @@ def test_render_procedure_images_does_not_clip_embedded_image_bbox(monkeypatch):
 
     assert len(images) == 1
     assert clips == [None]
+
+
+def test_select_primary_figure_keeps_page_raster_before_experimental_region_crop():
+    procedure = {
+        "fru_id": "1100",
+        "fru_name": "Coin-cell battery",
+        "related_image_ids": ["page", "region"],
+    }
+    figures = {
+        "page": {
+            "image_id": "page",
+            "page": 1,
+            "figure_kind": "page_raster",
+            "related_fru_id": "1100",
+        },
+        "region": {
+            "image_id": "region",
+            "page": 1,
+            "figure_kind": "region_crop",
+            "related_fru_id": "1100",
+            "bbox": [50, 100, 200, 220],
+        },
+    }
+
+    primary = vs.select_primary_figure(procedure, figures)
+    metadata = vs.primary_figure_metadata(procedure, figures)
+
+    assert primary["image_id"] == "page"
+    assert metadata["primary_image_id"] == "page"
+    assert "precision_component" in metadata["primary_selection_reason"]
+
+
+def test_select_primary_figure_keeps_stable_embedded_native():
+    procedure = {
+        "fru_id": "1020",
+        "fru_name": "Built-in battery",
+        "related_image_ids": ["embedded", "region"],
+    }
+    figures = {
+        "embedded": {
+            "image_id": "embedded",
+            "page": 1,
+            "figure_kind": "embedded_image",
+            "related_fru_id": "1020",
+            "bbox": [10, 20, 300, 420],
+        },
+        "region": {
+            "image_id": "region",
+            "page": 1,
+            "figure_kind": "region_crop",
+            "related_fru_id": "1020",
+            "bbox": [50, 100, 200, 220],
+        },
+    }
+
+    primary = vs.select_primary_figure(procedure, figures)
+
+    assert primary["image_id"] == "embedded"
+
+
+def test_select_primary_figure_keeps_tiny_embedded_before_experimental_region_crop():
+    procedure = {
+        "fru_id": "1140",
+        "fru_name": "I/O bracket and RJ45 bracket",
+        "related_image_ids": ["embedded", "region", "precise"],
+    }
+    figures = {
+        "embedded": {
+            "image_id": "embedded",
+            "page": 1,
+            "figure_kind": "embedded_image",
+            "related_fru_id": "1140",
+            "bbox": [240, 100, 270, 135],
+        },
+        "region": {
+            "image_id": "region",
+            "page": 1,
+            "figure_kind": "region_crop",
+            "related_fru_id": "1140",
+            "bbox": [0, 80, 600, 300],
+        },
+        "precise": {
+            "image_id": "precise",
+            "page": 1,
+            "figure_kind": "region_crop_precise",
+            "related_fru_id": "1140",
+            "bbox": [220, 90, 300, 150],
+        },
+    }
+
+    primary = vs.select_primary_figure(procedure, figures)
+
+    assert primary["image_id"] == "embedded"

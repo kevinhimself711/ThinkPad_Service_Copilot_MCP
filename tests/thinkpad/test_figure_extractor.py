@@ -126,7 +126,7 @@ def _raster(page):
     )
 
 
-def _page(page, headings, drawing_bands):
+def _page(page, headings, drawing_bands, drawing_rects=None):
     from src.thinkpad.models import HMMPage
 
     return HMMPage(
@@ -138,6 +138,7 @@ def _page(page, headings, drawing_bands):
         height=800.0,
         fru_headings=headings,
         drawing_bands=drawing_bands,
+        drawing_rects=drawing_rects or [],
     )
 
 
@@ -239,6 +240,31 @@ def test_region_crops_created_for_shared_raster_page_without_displacing_native_i
     assert any(image_id.endswith("_region_1060") for image_id in procs["1060"].related_image_ids)
     assert any(image_id.endswith("_region_1070") for image_id in procs["1070"].related_image_ids)
     assert procs["1070"].related_image_ids[0] == "m_p079_raster"
+
+
+def test_region_crop_uses_drawing_rects_for_narrow_bbox():
+    from src.thinkpad.fru_extractor import attribute_figures_to_procedures
+
+    procedures = [_proc("1060", "I/O bracket", 79, 79), _proc("1070", "WLAN card", 79, 79)]
+    pages = [
+        _page(
+            79,
+            [(100.0, "1060"), (410.0, "1070")],
+            [(130.0, 270.0), (450.0, 620.0)],
+            drawing_rects=[(40.0, 130.0, 180.0, 260.0), (360.0, 450.0, 520.0, 620.0)],
+        )
+    ]
+    figures = [_raster(79)]
+
+    updated_figs, _ = attribute_figures_to_procedures(figures, procedures, pages)
+
+    wide_regions = {f.related_fru_id: f for f in updated_figs if f.figure_kind == "region_crop"}
+    precise_regions = {f.related_fru_id: f for f in updated_figs if f.figure_kind == "region_crop_precise"}
+
+    assert wide_regions["1060"].bbox == (0.0, 118.0, 600.0, 282.0)
+    assert wide_regions["1070"].bbox == (0.0, 438.0, 600.0, 632.0)
+    assert precise_regions["1060"].bbox == (40.0, 118.0, 180.0, 272.0)
+    assert precise_regions["1070"].bbox == (360.0, 438.0, 520.0, 632.0)
 
 
 def test_region_crop_above_first_heading_continues_preceding_fru():

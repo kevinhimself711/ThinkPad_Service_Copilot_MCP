@@ -246,7 +246,13 @@ def _prioritize_related_images(
     on procedures whose original page/embedded figure was already correct.
     """
 
-    priority = {"embedded_image": 0, "page_raster": 1, "region_crop": 2, "unknown": 3}
+    priority = {
+        "embedded_image": 0,
+        "page_raster": 1,
+        "region_crop": 2,
+        "region_crop_precise": 3,
+        "unknown": 4,
+    }
     return sorted(
         dict.fromkeys(image_ids),
         key=lambda image_id: (
@@ -283,7 +289,9 @@ def _build_region_crop_figures(
             continue
         if len(page.fru_headings) < 2 and not _has_above_first_heading_drawing(page):
             continue
-        for fru_id, bbox in _region_bboxes_for_page(page, ordered_starts):
+        wide_bboxes = dict(_region_bboxes_for_page(page, ordered_starts))
+        precise_bboxes = dict(_precise_region_bboxes_for_page(page, ordered_starts))
+        for fru_id, bbox in wide_bboxes.items():
             owner = _procedure_for_fru(fru_id, page_number, procs_by_fru)
             if owner is None:
                 continue
@@ -299,6 +307,28 @@ def _build_region_crop_figures(
                     related_component=owner.fru_name,
                     bbox=bbox,
                     figure_kind="region_crop",
+                    source_image_id=source.image_id,
+                    storage_uri=None,
+                )
+            )
+        for fru_id, bbox in precise_bboxes.items():
+            owner = _procedure_for_fru(fru_id, page_number, procs_by_fru)
+            if owner is None:
+                continue
+            if _is_diagnostic_pseudo_fru(owner):
+                continue
+            if wide_bboxes.get(fru_id) == bbox:
+                continue
+            region_id = f"{source.image_id}_region_precise_{fru_id}"
+            regions.append(
+                replace(
+                    source,
+                    image_id=region_id,
+                    caption=f"Precise region crop for FRU {fru_id} removal diagram",
+                    related_fru_id=owner.fru_id,
+                    related_component=owner.fru_name,
+                    bbox=bbox,
+                    figure_kind="region_crop_precise",
                     source_image_id=source.image_id,
                     storage_uri=None,
                 )
@@ -337,19 +367,156 @@ def _region_bboxes_for_page(
         hi = min(height, boundaries[index + 1])
         overlap = _drawing_overlap(page.drawing_bands, lo, hi)
         if overlap is not None:
-            regions[fru_id] = _merge_band(regions.get(fru_id), overlap)
+            bbox = (0.0, overlap[0], width, overlap[1])
+            regions[fru_id] = _merge_bbox(regions.get(fru_id), bbox)
 
     first_heading = float(headings[0][0])
     above_overlap = _drawing_overlap(page.drawing_bands, 0.0, first_heading)
     if above_overlap is not None:
         preceding = _nearest_preceding(page.page, ordered_starts, exclusive=True)
         if preceding is not None:
-            regions[preceding.fru_id] = _merge_band(regions.get(preceding.fru_id), above_overlap)
+            above_bbox = (0.0, above_overlap[0], width, above_overlap[1])
+            regions[preceding.fru_id] = _merge_bbox(regions.get(preceding.fru_id), above_bbox)
 
     return [
-        (fru_id, _padded_bbox(0.0, band[0], width, band[1], width, height))
-        for fru_id, band in regions.items()
+        (fru_id, _padded_bbox(bbox[0], bbox[1], bbox[2], bbox[3], width, height))
+        for fru_id, bbox in regions.items()
     ]
+
+
+def _precise_region_bboxes_for_page(
+    page: HMMPage,
+    ordered_starts: list[tuple[int, FRUProcedure]],
+) -> list[tuple[str, tuple[float, float, float, float]]]:
+    if not page.width or not page.height or not page.fru_headings or not page.drawing_bands:
+        return []
+    if not page.drawing_rects:
+        return []
+    regions: dict[str, tuple[float, float, float, float]] = {}
+    height = float(page.height)
+    width = float(page.width)
+    headings = page.fru_headings
+    boundaries = [float(y) for y, _ in headings] + [height]
+
+    for index, (heading_y, fru_id) in enumerate(headings):
+        lo = max(0.0, float(heading_y))
+        hi = min(height, boundaries[index + 1])
+        bbox = _drawing_bbox_overlap(page, lo, hi)
+        if bbox is not None:
+            regions[fru_id] = _merge_bbox(regions.get(fru_id), bbox)
+
+    first_heading = float(headings[0][0])
+    above_bbox = _drawing_bbox_overlap(page, 0.0, first_heading)
+    if above_bbox is not None:
+        preceding = _nearest_preceding(page.page, ordered_starts, exclusive=True)
+        if preceding is not None:
+            regions[preceding.fru_id] = _merge_bbox(regions.get(preceding.fru_id), above_bbox)
+
+    return [
+        (fru_id, _padded_bbox(bbox[0], bbox[1], bbox[2], bbox[3], width, height))
+        for fru_id, bbox in regions.items()
+    ]
+
+
+def _drawing_bbox_overlap(
+    page: HMMPage,
+    lo: float,
+    hi: float,
+) -> tuple[float, float, float, float] | None:
+    rects = _drawing_rects_in_band(page, lo, hi)
+    if rects:
+        return _merge_rects(_connected_drawing_cluster(rects))
+    overlap = _drawing_overlap(page.drawing_bands, lo, hi)
+    if overlap is None or not page.width:
+        return None
+    return (0.0, overlap[0], float(page.width), overlap[1])
+
+
+def _drawing_rects_in_band(
+    page: HMMPage,
+    lo: float,
+    hi: float,
+    min_size: float = 2.0,
+) -> list[tuple[float, float, float, float]]:
+    rects: list[tuple[float, float, float, float]] = []
+    page_width = float(page.width or 0.0)
+    page_height = float(page.height or 0.0)
+    for rx0, ry0, rx1, ry1 in page.drawing_rects:
+        width = float(rx1) - float(rx0)
+        height = float(ry1) - float(ry0)
+        if width < min_size or height < min_size:
+            continue
+        if page_width and width > page_width * 0.92 and height < 6.0:
+            continue
+        if page_height and height > page_height * 0.92 and width < 6.0:
+            continue
+        start = max(float(ry0), lo)
+        end = min(float(ry1), hi)
+        if end - start >= min_size:
+            rects.append((float(rx0), start, float(rx1), end))
+    return rects
+
+
+def _connected_drawing_cluster(
+    rects: list[tuple[float, float, float, float]],
+    gap: float = 18.0,
+) -> list[tuple[float, float, float, float]]:
+    """Return the largest connected drawing cluster inside a FRU band.
+
+    The goal is not perfect image segmentation; it is to avoid M8.9's full-width
+    vertical bands when a page contains several separate line-art regions.
+    """
+
+    clusters: list[list[tuple[float, float, float, float]]] = []
+    for rect in sorted(rects, key=lambda item: (item[1], item[0])):
+        merged = False
+        for cluster in clusters:
+            if any(_rects_near(rect, other, gap) for other in cluster):
+                cluster.append(rect)
+                merged = True
+                break
+        if not merged:
+            clusters.append([rect])
+
+    changed = True
+    while changed:
+        changed = False
+        for i in range(len(clusters)):
+            if changed:
+                break
+            for j in range(i + 1, len(clusters)):
+                if any(_rects_near(a, b, gap) for a in clusters[i] for b in clusters[j]):
+                    clusters[i].extend(clusters.pop(j))
+                    changed = True
+                    break
+
+    return max(clusters, key=lambda cluster: _rect_area(_merge_rects(cluster))) if clusters else rects
+
+
+def _rects_near(
+    a: tuple[float, float, float, float],
+    b: tuple[float, float, float, float],
+    gap: float,
+) -> bool:
+    return not (
+        a[2] + gap < b[0]
+        or b[2] + gap < a[0]
+        or a[3] + gap < b[1]
+        or b[3] + gap < a[1]
+    )
+
+
+def _merge_rects(rects: list[tuple[float, float, float, float]]) -> tuple[float, float, float, float]:
+    return (
+        min(rect[0] for rect in rects),
+        min(rect[1] for rect in rects),
+        max(rect[2] for rect in rects),
+        max(rect[3] for rect in rects),
+    )
+
+
+def _rect_area(rect: tuple[float, float, float, float]) -> float:
+    return max(0.0, rect[2] - rect[0]) * max(0.0, rect[3] - rect[1])
 
 
 def _drawing_overlap(
@@ -378,6 +545,20 @@ def _merge_band(
     return min(existing[0], new_band[0]), max(existing[1], new_band[1])
 
 
+def _merge_bbox(
+    existing: tuple[float, float, float, float] | None,
+    new_bbox: tuple[float, float, float, float],
+) -> tuple[float, float, float, float]:
+    if existing is None:
+        return new_bbox
+    return (
+        min(existing[0], new_bbox[0]),
+        min(existing[1], new_bbox[1]),
+        max(existing[2], new_bbox[2]),
+        max(existing[3], new_bbox[3]),
+    )
+
+
 def _padded_bbox(
     x0: float,
     y0: float,
@@ -402,7 +583,7 @@ def _resolve_owner(
     procs_by_fru: dict[str, list[FRUProcedure]],
     ordered_starts: list[tuple[int, FRUProcedure]],
 ) -> FRUProcedure | None:
-    if figure.figure_kind == "region_crop" and figure.related_fru_id:
+    if figure.figure_kind in {"region_crop", "region_crop_precise"} and figure.related_fru_id:
         return _procedure_for_fru(figure.related_fru_id, figure.page, procs_by_fru)
     page = page_info.get(figure.page)
     # No positional data -> legacy page-span containment.

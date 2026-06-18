@@ -1840,3 +1840,80 @@ Next milestone should be M8.10 crop precision remediation if the goal is quality
 improvement before packaging. M9 packaging is acceptable only if it explicitly
 documents the M8.9 88% full-live figure-correctness boundary and does not present
 diagram selection as solved.
+
+---
+
+## M8.10 Crop Precision Remediation Attempt
+
+- Date: 2026-06-18
+- User goal: implement M8.10 for real, keep the M8.8/M8.9 live scorer consistent,
+  and determine whether crop precision can be pushed above the planned `>=93%`
+  figure-correctness gate before M9.
+- Result: complete as a diagnostic attempt, but not a successful quality gate.
+  Final stable live performance remains 147/167 (88%), matching M8.9, while the
+  experimental selector regressed to 135/167 (80%) and was disabled.
+- Canonical report: `docs/M8_10_CROP_PRECISION_REPORT.md`
+
+### File-Level Changes
+
+| Change | Path | Implementation Fact |
+|---|---|---|
+| Modified | `src/thinkpad/models.py` | Added `HMMPage.drawing_rects` and allowed `FigureRecord.figure_kind="region_crop_precise"`. |
+| Modified | `src/thinkpad/hmm_loader.py` | Captures PyMuPDF drawing rectangles and derives legacy `drawing_bands` from them. |
+| Modified | `src/thinkpad/fru_extractor.py` | Keeps M8.9 full-width `region_crop` records and adds `region_crop_precise` records from connected drawing-rect clusters; diagnostic pseudo-FRUs remain excluded. |
+| Modified | `src/thinkpad/vision_steps.py` | Clips both region crop kinds during rendering; keeps stable native-first primary selection after live validation showed region promotion regressed correctness. |
+| Modified | `scripts/thinkpad_vision_live_eval.py` | Adds `--target m8-9-failures`, primary-image diagnostics, possible false-negative flagging, and M8.9-compatible population counting that ignores diagnostic precise crops. |
+| Added | `scripts/thinkpad_prepare_crop_review.py` | Generates ignored residual crop review JSON/Markdown from M8.9 failures, targeted-region failures, and zero-image cases. |
+| Modified | `tests/thinkpad/test_figure_extractor.py` | Covers wide vs precise region crops, continuation behavior, and pseudo-FRU skip. |
+| Modified | `tests/thinkpad/test_vision_steps.py` | Covers stable native-first selection, precise crop rendering, cache version, and no embedded-image clipping. |
+| Modified | `tests/thinkpad/test_models.py` | Covers `drawing_rects` serialization. |
+| Added | `docs/M8_10_CROP_PRECISION_REPORT.md` | Records implementation facts, live negative result, and M8.11 recommendation. |
+
+### Extraction Results
+
+Local ignored extraction was regenerated under `data/extracted/m3`.
+
+| Metric | Value |
+|---|---:|
+| Figure records | 1550 |
+| Embedded-image figures | 694 |
+| Page-raster figures | 591 |
+| Region-crop figures | 135 |
+| Precise region-crop figures | 130 |
+| FRU procedures | 213 |
+| Image-only procedures | 194 |
+| Image-only procedures with images | 186 |
+| Image-only procedures with no image | 8 |
+| Image-only procedures with region-linked images | 98 |
+
+### Live Evaluation Results
+
+All DashScope runs used `DASHSCOPE_API_KEY` as a transient environment variable.
+No provider outputs, local reports, crop images, PDFs, extracted text, or keys are
+committed.
+
+| Run | Population | Correct | Rate | Non-empty | Spec leaks | Finding |
+|---|---:|---:|---:|---:|---:|---|
+| Smoke | 10 | n/a | n/a | 10/10 | 0 | Provider reachable |
+| Experimental selector full | 167 | 135 | 80% | 166/167 | 0 | Regressed; disabled |
+| Final old M8.9 failures | 20 | 0 | 0% | 20/20 | 0 | Residual set unchanged |
+| Final targeted regions | 91 | 82 | 90% | 91/91 | 0 | Same as M8.9 |
+| Final full stable | 167 | 147 | 88% | 167/167 | 0 | Same as M8.9 |
+
+### Validation
+
+| Command | Result |
+|---|---|
+| `python -m pytest tests\thinkpad\test_figure_extractor.py tests\thinkpad\test_vision_steps.py tests\thinkpad\test_models.py -q` | Passed, 28 tests. |
+| `python -m pytest tests\thinkpad -q -m "not llm" --basetemp data\tmp\pytest_m8_10` | Passed, 149 tests. |
+| `python scripts\thinkpad_agent_evaluate.py --golden-set tests\fixtures\thinkpad_m8_2_reality_golden_set.json --manifest data\manifests\manuals_manifest.yaml --extracted-dir data\extracted\m3 --collection thinkpad_m4 --mode deterministic --strict-citation --output data\eval\m8_10_120_det_strict_final.json` | 120 cases, 0 failed, pass rate 1.0. |
+| `ruff check src\thinkpad scripts\thinkpad_*.py tests\thinkpad` | Passed. |
+
+### Handoff
+
+M8.10 did not justify M9 as a clean quality handoff. The next quality milestone
+should be M8.11 residual visual ownership remediation. It should start with human
+classification of `data/eval/m8_10_residual_crop_review.md` into wrong-neighbor,
+ambiguous, scorer false-negative, missing-crop, and ownership-bug buckets before
+making more extraction changes. If M9 starts instead, it must explicitly accept
+the 147/167 (88%) full-live figure-correctness boundary.

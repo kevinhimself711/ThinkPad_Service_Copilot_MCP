@@ -77,9 +77,9 @@ Preferred strategy:
 Current baseline:
 
 - Active branch: `thinkpad-hmm-domain`
-- M8.9 implementation baseline: `fix(thinkpad): add figure-region cropping for image-only procedures`
-- Completed milestones: M0 through M8.9
-- Current next milestone: M8.10 crop precision remediation or M9 packaging with explicit M8.9 risk acceptance
+- M8.10 implementation baseline: `fix(thinkpad): improve figure crop precision for image-only procedures`
+- Completed milestones: M0 through M8.10
+- Current next milestone: M8.11 residual visual ownership remediation or M9 packaging with explicit M8.10 risk acceptance
 
 Current capability status:
 
@@ -94,19 +94,23 @@ Current capability status:
 - M8.7: qwen-vl vision reconstruction was added as optional, additive, unverified assistance for image-only removal diagrams. `vision_steps` are labeled `citation_source=qwen_vl_unverified` and `verified=false`; they are never authoritative for torque, screw counts, FRU IDs, or safety facts.
 - M8.8: figure-to-FRU attribution now uses within-page FRU heading y-position, drawing bands, and embedded image bboxes. Bounded live figure correctness improved from 130/171 (76%) in M8.7 to 133/148 (89%) in M8.8 with 0 spec leaks.
 - M8.9: region-crop figure evidence and clipped rendering are implemented. Coverage improved from 163/194 image-only procedures with images to 186/194, but final full live figure correctness is 147/167 (88%), below the >93% target, with 0 spec leaks.
+- M8.10: precise crop candidates, primary-image diagnostics, and residual crop review tooling are implemented. The experimental selector regressed to 135/167 (80%) and is disabled; final stable full live remains 147/167 (88%) with 0 spec leaks.
 
-M8.9 results define the current quality boundary:
+M8.10 results define the current quality boundary:
 
 - 120-case deterministic strict regression remains clean with vision disabled.
 - M8.7 full-corpus qwen-vl reconstruction: 171/171 non-empty, 0 spec leaks, figure correctness 130/171 (76%).
 - M8.8 bounded live figure re-evaluation: 148/148 reconstructed, 0 spec leaks, figure correctness 133/148 (89%).
 - M8.9 final full live figure re-evaluation: 167/167 reconstructed, 0 spec leaks, figure correctness 147/167 (88%).
 - M8.9 targeted region live evaluation: 91/91 reconstructed, 0 spec leaks, figure correctness 82/91 (90%).
+- M8.10 final full live figure re-evaluation: 167/167 reconstructed, 0 spec leaks, figure correctness 147/167 (88%).
+- M8.10 final old-failure target: 20/20 reconstructed, 0 spec leaks, figure correctness 0/20.
+- M8.10 experimental selector full run: 166/167 reconstructed, 0 spec leaks, figure correctness 135/167 (80%); this behavior is not the default.
 - `image_only` FRUs with no attributed image dropped from 31 to 8, but 20 final live figure mismatches remain.
 
 Do not describe these results as universal open-world repair accuracy. They prove a bounded diagram-first evidence path and a measured improvement in figure attribution. Raw LLM-only or raw vision-only repair planning is not the default demo path. The default user-facing behavior should remain deterministic validation, cited evidence, and explicit unverified labeling for vision-derived steps.
 
-M9 packaging can proceed only if it explicitly accepts and documents M8.9's 88% full-live figure-correctness boundary. If the goal is to improve quality before packaging, the next milestone should be M8.10 crop precision remediation.
+M9 packaging can proceed only if it explicitly accepts and documents M8.10's 88% full-live figure-correctness boundary. If the goal is to improve quality before packaging, the next milestone should be M8.11 residual visual ownership remediation.
 
 ---
 
@@ -153,6 +157,8 @@ Always check:
   - `docs/M8_5_STEP_CITATION_REPORT.md`
   - `docs/POST_M8_5_IMAGE_TEXT_DEFECTS.md`
   - `docs/M8_6_PRESENTATION_TYPOLOGY.md`
+  - `docs/M8_9_FIGURE_REGION_REPORT.md`
+  - `docs/M8_10_CROP_PRECISION_REPORT.md`
 
 If a referenced file does not exist, do not fail the task. Create it only when it is directly needed by the requested change.
 
@@ -374,6 +380,8 @@ docs/
   M8_5_STEP_CITATION_REPORT.md
   M8_6_PRESENTATION_TYPOLOGY.md
   POST_M8_5_IMAGE_TEXT_DEFECTS.md
+  M8_9_FIGURE_REGION_REPORT.md
+  M8_10_CROP_PRECISION_REPORT.md
 
 config/
   manuals_manifest.example.yaml
@@ -409,7 +417,7 @@ Current ThinkPad script families:
 - Evidence evaluation: `thinkpad_evaluate.py`, `thinkpad_audit_milestones.py`
 - Agent: `thinkpad_agent_plan.py`, `thinkpad_agent_evaluate.py`, `thinkpad_generate_agent_eval_candidates.py`
 - Human gold: `thinkpad_prepare_human_gold_review.py`, `thinkpad_finalize_human_gold.py`
-- Step/vision evaluation: `thinkpad_prepare_step_citation_review.py`, `thinkpad_render_step_pages.py`, `thinkpad_presentation_typology.py`, `thinkpad_vision_live_smoke.py`, `thinkpad_vision_live_eval.py`
+- Step/vision evaluation: `thinkpad_prepare_step_citation_review.py`, `thinkpad_render_step_pages.py`, `thinkpad_presentation_typology.py`, `thinkpad_vision_live_smoke.py`, `thinkpad_vision_live_eval.py`, `thinkpad_prepare_crop_review.py`
 
 Do not add legacy placeholder modules such as `hmm_splitter.py`, `image_captioning.py`, `mcp_tools.py`, or `evals.py` unless a new implementation explicitly justifies them. Prefer the existing module names above.
 
@@ -482,6 +490,8 @@ class FigureRecord:
     manual_id: str
     page: int
     bbox: tuple[float, float, float, float] | None
+    figure_kind: str  # embedded_image | page_raster | region_crop | region_crop_precise | unknown
+    source_image_id: str | None
     caption: str
     surrounding_text: str
     related_fru_id: str | None
@@ -755,14 +765,16 @@ Current evaluation reports:
 - `docs/POST_M8_5_IMAGE_TEXT_DEFECTS.md`
 - `docs/M8_6_PRESENTATION_TYPOLOGY.md`
 - `docs/M8_9_FIGURE_REGION_REPORT.md`
+- `docs/M8_10_CROP_PRECISION_REPORT.md`
 
-Evaluation interpretation rules after M8.9:
+Evaluation interpretation rules after M8.10:
 
 - Report deterministic strict, live retrieval strict, and raw live LLM strict separately.
 - Treat the M8.4 human gold fixture as a useful manually reviewed gate, but not as proof of step-level procedure correctness for image-only HMM procedures.
 - Treat M8.5 textual step-gold as deprecated because the human review invalidated its premise.
 - For `image_only` and `cross_ref` FRU procedures, evaluate correct cited diagram/figure evidence, absence of fabricated text steps, structured screw/spec table grounding, and explicit unverified labeling of optional vision steps.
-- Report qwen-vl reconstruction and figure correctness separately. M8.9 measured 147/167 (88%) figure correctness on the final full live run and 82/91 (90%) on region-linked targets, with 0 spec leaks. This is the current live figure-attribution boundary, not a perfect result.
+- Report qwen-vl reconstruction and figure correctness separately. M8.10 measured 147/167 (88%) figure correctness on the final full live run and 82/91 (90%) on region-linked targets, with 0 spec leaks. This is the current live figure-attribution boundary, not a perfect result.
+- Preserve the M8.10 negative result: blindly promoting region crops as primary evidence regressed to 135/167 (80%), so stable native-first evidence remains the default.
 - Do not collapse recovered user-visible success and raw provider/LLM quality into one headline metric.
 - Preserve provider failures such as `provider_timeout` in reports; do not hide them behind fallback success.
 
@@ -775,7 +787,7 @@ The MCP evidence layer, graph tool, and local agent client now exist. Future wor
 1. Keep deterministic evidence tools as the source of truth.
 2. Keep `get_fru_dependency_chain` as graph evidence, not a buzzword feature.
 3. Use the local repair-planning agent for demos with deterministic validation and evidence fallback.
-4. Treat M8.9 figure-region cropping as complete with risk: it improved image coverage but missed the >93% correctness target. Choose M8.10 crop precision remediation if quality is still the priority, or enter M9 only with the 88% full-live figure boundary explicitly documented.
+4. Treat M8.10 crop precision remediation as complete but not successful: it preserved the M8.9 88% boundary and added diagnostics, but did not improve the old residual failures. Choose M8.11 residual visual ownership remediation if quality is still the priority, or enter M9 only with the 88% full-live figure boundary explicitly documented.
 
 ### Agent workflow
 
@@ -1006,7 +1018,7 @@ For retrieval/evaluation features, also require:
 
 Use this roadmap unless the user gives a different one.
 
-### Completed: M0-M8.9
+### Completed: M0-M8.10
 
 - M0: upstream bootstrap and repository adaptation.
 - M1: 8-manual Lenovo HMM risk spike.
@@ -1023,19 +1035,20 @@ Use this roadmap unless the user gives a different one.
 - M8.7: added optional qwen-vl unverified vision reconstruction for image-only diagrams and measured 130/171 (76%) figure correctness with 0 spec leaks.
 - M8.8: improved figure-to-FRU attribution with within-page y-position, drawing bands, and image bboxes; bounded live figure correctness is 133/148 (89%) with 0 spec leaks.
 - M8.9: added region-crop figure evidence and clipped rendering for image-only procedures; image coverage improved from 163/194 to 186/194, final full live figure correctness is 147/167 (88%), targeted region correctness is 82/91 (90%), and spec leaks remain 0.
+- M8.10: added drawing-rect precise crop candidates, primary-image diagnostics, and a residual crop review pack; the experimental selector regressed to 135/167 (80%) and was disabled, so final stable full live remains 147/167 (88%) with 0 spec leaks.
 
-### Current next phase: M8.10 Crop Precision Remediation or M9 With Explicit Risk Acceptance
+### Current next phase: M8.11 Residual Visual Ownership Remediation or M9 With Explicit Risk Acceptance
 
-- If choosing M8.10, target the remaining 20 M8.9 live mismatches: fine-grained component-name mismatch, neighbor large assembly bleed, and neighbor battery/large-part bleed.
-- M8.10 should improve crop precision and figure ranking, not relax spec-leak or unverified-vision governance.
-- If choosing M9 instead, record that packaging proceeds with the M8.9 risk accepted: final full live figure correctness is 147/167 (88%), targeted region correctness is 82/91 (90%), and 8 image-only FRUs still have no attributed image.
+- If choosing M8.11, first classify the M8.10 residual crop review pack into wrong-neighbor crop, ambiguous shared drawing, scorer false-negative, missing crop, and extraction/ownership bug buckets.
+- M8.11 should improve visual ownership evidence, not relax the qwen-vl name-check scorer, spec-leak guard, or unverified-vision governance.
+- If choosing M9 instead, record that packaging proceeds with the M8.10 risk accepted: final full live figure correctness is 147/167 (88%), targeted region correctness is 82/91 (90%), old-failure target is 0/20, and 8 image-only FRUs still have no attributed image.
 
 ### Following phase: M9 Packaging And Interview Readiness
 
-- Add Docker and CI after M8.10 improves the residual crop-precision gap, or after M8.9's residual risk is explicitly accepted.
+- Add Docker and CI after M8.11 improves the residual visual-ownership gap, or after M8.10's residual risk is explicitly accepted.
 - Write final README and demo script.
 - Write resume bullets and interview notes.
-- Clean up docs so claims match M8.9 evidence.
+- Clean up docs so claims match M8.10 evidence.
 - Preserve raw-vs-recovered and verified-vs-unverified metric distinctions in all demo and interview materials.
 - Do not expose raw LLM-only or raw qwen-vl-only repair planning as the default path.
 
@@ -1086,7 +1099,7 @@ M9 demo claims must also include the evaluation boundary:
 - M8.4 human gold exists but does not prove textual step extraction for image-only procedures,
 - M8.5 text-step human gold is deprecated because the human review invalidated its premise,
 - M8.8 live figure correctness is 133/148 (89%) with 0 spec leaks, not 100%,
-- M8.9 final full live figure correctness is 147/167 (88%) with 0 spec leaks; image-only coverage improved from 163/194 to 186/194, but the >93% target was not met,
+- M8.10 final full live figure correctness remains 147/167 (88%) with 0 spec leaks; image-only coverage is 186/194 and the >93% target was not met,
 - qwen-vl vision steps are additive and unverified,
 - generated repair plans are evidence-grounded and validated rather than raw LLM-only.
 
@@ -1107,7 +1120,7 @@ Do not:
 - Add dependencies without checking existing equivalents.
 - Hide failing tests or claim unrun tests passed.
 - Inflate metrics without reproducible evaluation artifacts.
-- Claim M8.4c, M8.8, or M8.9 metrics prove universal open-world repair accuracy.
+- Claim M8.4c, M8.8, M8.9, or M8.10 metrics prove universal open-world repair accuracy.
 - Claim the system extracts authoritative textual repair steps from image-only HMM procedures.
 - Present qwen-vl reconstructed steps as verified Lenovo manual text.
 - Treat `compare_generations` as implemented before it actually exists.

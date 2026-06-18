@@ -123,7 +123,7 @@ Required domain records:
 
 - `Citation`: required grounding fields `manual_id`, `source_url`, `page_start`, optional `page_end`, `section`, and `section_id`.
 - `TableRecord`: one structured table row with preserved columns, row values, page, table type, parent section, and citation.
-- `FigureRecord`: one diagram/image/page-render reference with page, optional bbox, caption, surrounding text, storage URI, and citation.
+- `FigureRecord`: one diagram/image/page-render reference with page, optional bbox, caption, surrounding text, storage URI, citation, `figure_kind`, and optional `source_image_id`.
 - `FRUProcedure`: procedure ID, FRU ID/name, steps, prerequisites, warnings, related image IDs, and citation.
 - `WarningRecord`: safety marker with warning level, text, page, component hint, and citation.
 - `DependencyEdge`: directed FRU prerequisite relation with citation.
@@ -184,17 +184,31 @@ extract_manual_artifacts(manual, options) -> ExtractionResult
 
 New M3 records:
 
-- `HMMPage`: one 1-based PDF page with text, source URL, embedded image count, drawing count, raster fallback signal, page size, optional PyMuPDF table blocks, and image xrefs.
+- `HMMPage`: one 1-based PDF page with text, source URL, embedded image count, drawing count, raster fallback signal, page size, optional PyMuPDF table blocks, image xrefs, embedded-image bboxes, FRU heading y-offsets, drawing y-bands, and drawing rectangles.
 - `ExtractionResult`: one manual-level extraction bundle with tables, figures, FRU procedures, warnings, dependency edges, page count, and failures.
 
 Module responsibilities:
 
-- `src/thinkpad/hmm_loader.py`: opens local PDFs with PyMuPDF, enforces local file existence, checks file size and SHA256 for `downloaded` or `validated` manifest entries, extracts text and structural page signals, and only probes `find_tables()` on likely table pages.
+- `src/thinkpad/hmm_loader.py`: opens local PDFs with PyMuPDF, enforces local file existence, checks file size and SHA256 for `downloaded` or `validated` manifest entries, extracts text and structural page signals, records image bboxes / FRU heading offsets / drawing bands / drawing rectangles, and only probes `find_tables()` on likely table pages.
 - `src/thinkpad/table_extractor.py`: converts PyMuPDF table blocks into row-preserving `TableRecord` objects, with Markdown/text table parsing as a fallback candidate path.
 - `src/thinkpad/fru_extractor.py`: slices FRU procedure sections, preserves prerequisites, emits `DependencyEdge` records, and avoids treating numeric error codes such as `0271` as FRU procedure headings.
-- `src/thinkpad/figure_extractor.py`: records embedded image candidates and raster fallback candidates. It writes image files only when `write_images=True`.
+- `src/thinkpad/figure_extractor.py`: records embedded image candidates and raster fallback candidates with `figure_kind` metadata. It writes image files only when `write_images=True`.
 - `src/thinkpad/safety.py`: emits cited `WarningRecord` objects for DANGER, CAUTION, ESD, battery, and system-board safety signals.
 - `src/thinkpad/extraction.py`: orchestrates one-manual extraction and writes deterministic JSONL/summary artifacts for local validation.
+
+Figure evidence contract after M8.10:
+
+- `figure_kind` values are `embedded_image`, `page_raster`, `region_crop`,
+  `region_crop_precise`, or `unknown`.
+- `region_crop` preserves the M8.9 full-width vertical crop used as stable
+  recovery evidence for shared-page drawings.
+- `region_crop_precise` is an additional diagnostic crop from connected
+  drawing-rectangle clusters. It must not displace stable native evidence unless
+  a later live evaluation proves the selector is better under the unchanged
+  M8.8/M8.9 qwen-vl name-check scorer.
+- `source_image_id` links a crop back to its page raster source.
+- Exact specs still come from structured text/table evidence, not from diagrams
+  or vision reconstruction.
 
 M3 CLI:
 

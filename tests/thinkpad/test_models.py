@@ -88,10 +88,12 @@ def test_hmm_page_and_extraction_result_serialize():
         embedded_image_count=1,
         drawing_count=2,
         table_blocks=[[["Code", "Action"], ["0271", "Run setup"]]],
+        drawing_rects=[(10.0, 20.0, 100.0, 120.0)],
     )
     result = ExtractionResult(manual_id=page.manual_id, page_count=1)
 
     assert page.to_dict()["table_blocks"][0][1][0] == "0271"
+    assert page.to_dict()["drawing_rects"][0] == (10.0, 20.0, 100.0, 120.0)
     assert result.to_dict()["manual_id"] == page.manual_id
     json.dumps(page.to_dict())
     json.dumps(result.to_dict())
