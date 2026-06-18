@@ -1961,3 +1961,57 @@ currently receive figure metadata/citations from MCP, not direct images. Direct
 image display requires a future MCP image-content implementation. Even after
 direct images exist, qwen-vl text remains auxiliary interpretation after the
 diagram, not the main repair source.
+
+## M8.11 Text-Anchor Figure Cropping — FAILED (reverted; preserved on a branch)
+
+Date: 2026-06-18
+
+M8.11's scope was *text-anchor figure cropping* (`region_crop_anchored`): crop the
+sub-page band under each `Removal steps of <component>` anchor and attribute it to
+the name-matching FRU, to isolate small parts that share an exploded-view page.
+**It failed a controlled comparison and was reverted.** Full details + the 8-run
+experiment table are in `docs/EXPERIMENTS.md` (M8.11 section); this is the
+file-level + decision summary.
+
+### Outcome (the one valid, controlled comparison)
+Same scorer (qwen-vl-max-class held fixed), same population (N=171), only the
+anchored crops toggled on/off:
+- M8.10 selection, anchored OFF: **143/171**
+- M8.11, anchored ON:            **140/171**  → **net −3, a regression.**
+Across geometric crops (M8.9/M8.10) and text anchors (M8.11), three crop variants
+have failed to break the small-part-shares-page residual. **88% is the practical
+ceiling of the select-figure/crop-subregion approach.**
+
+### File-Level Changes (all REVERTED on `thinkpad-hmm-domain`; live on `m8.11-anchor-failure`)
+| File | What the failed change did |
+|---|---|
+| `src/thinkpad/hmm_loader.py` | `_REMOVAL_ANCHOR_RE` + `_page_removal_anchors` capturing `(y0, component)`. |
+| `src/thinkpad/models.py` | `HMMPage.removal_anchors`; `figure_kind` "region_crop_anchored". |
+| `src/thinkpad/fru_extractor.py` | anchored-crop builders + name-match attribution. |
+| `src/thinkpad/vision_steps.py` | `_figure_score` promotion of anchored crops (84, later 68). |
+| `config/settings.yaml` | vision model swap qwen-vl-max→qwen3-vl-plus (also reverted). |
+| `scripts/thinkpad_vision_live_eval.py` | `--exclude-anchored`, fixed `_baseline_image_count` to exclude all crop kinds. |
+
+### New scripts kept (useful tools, not part of the failed feature)
+- `scripts/thinkpad_model_ab_residual.py` — same-image multi-model A/B (isolates
+  recognition vs selection). Found qwen-vl-max 6% vs qwen3-vl-plus 33% on the 15
+  hardest residual images.
+- `scripts/thinkpad_recon_quality_ab.py` — pairwise reconstruction-quality judge
+  eval (for the re-scoped model question; see below).
+
+### Methodology mistakes recorded (do not repeat)
+1. A vision-model swap was introduced mid-M8.11, breaking single-variable control;
+   runs that vary scorer+population+code simultaneously (78/81/83%) are NOT
+   comparable to the 88% baseline and are flagged invalid in EXPERIMENTS.md.
+2. figure-match cannot move on a model swap (it measures selection, not reading);
+   the model question was mis-aimed at it.
+3. The anchored regression was offline-knowable; API budget was spent before an
+   offline simulation. Future selection changes: simulate offline first.
+
+### Governance / decisions
+- figure-match scorer fixed at qwen-vl-max (comparability with 88% history).
+- Anchored cropping abandoned + reverted; preserved on branch `m8.11-anchor-failure`
+  (commit `8e96c1a`) as the reproducible failure record.
+- Model-swap value re-scoped to reconstruction-step quality (separate judge eval),
+  which does not touch figure-match. Pending.
+- DASHSCOPE_API_KEY was exposed in chat again and MUST be rotated.

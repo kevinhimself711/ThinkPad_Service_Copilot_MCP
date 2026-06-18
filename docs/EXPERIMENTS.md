@@ -2675,3 +2675,82 @@ Result:
 
 Decision: M8.10 is safe as a non-regressing diagnostic change, but it should not
 be treated as a successful precision remediation.
+
+## M8.11: Text-Anchor Figure Cropping — FAILED, plus a methodology post-mortem
+
+Date: 2026-06-18
+
+**Bottom line up front:** M8.11's actual scope was *text-anchor figure cropping*
+(`region_crop_anchored`). It **FAILED** — a controlled comparison shows it is net
+**−3** vs the M8.10 baseline. The code was reverted on the main branch; the full
+failure working tree is preserved on branch `m8.11-anchor-failure` (commit
+`8e96c1a`). Midway through M8.11 a vision-model swap (qwen-vl-max → qwen3-vl-plus)
+was introduced, which **broke the single-variable principle** and produced a
+series of non-comparable runs recorded below for honesty. The final, valid,
+controlled comparison came last.
+
+### What M8.11 tried (the anchor idea)
+Lenovo HMMs contain no "Figure NN" references (0 across 336 pages), but every
+removal section opens with `Removal steps of <component>` at a known y-offset.
+Hypothesis: crop the sub-page band under each anchor and attribute it to the FRU
+whose name matches the anchor's component — isolating a small part that shares an
+exploded-view page with a larger neighbor (the residual ~12% from M8.8–M8.10).
+Implementation: `hmm_loader._page_removal_anchors`, `HMMPage.removal_anchors`,
+`FigureRecord.figure_kind="region_crop_anchored"`, `fru_extractor`
+anchored-crop builders, `vision_steps._figure_score` promotion.
+
+### The experiments, in order (⚠ = invalid comparison, do not cite as evidence)
+
+| # | Run | Scorer | N | figure-match | Valid? |
+|---|---|---|---|---|---|
+| 1 | Anchor coverage probe (offline) | — | 191 | 93.2% have an anchor | ✅ premise check |
+| 2 | Model A/B on 15 residual images (same image, 3 models) | n/a | 15 | qwen-vl-max 1/15 (6%), **qwen3-vl-plus 5/15 (33%)**, qwen3.7-plus 3/15 (20%, 40s latency, timeouts) | ✅ isolates recognition |
+| 3 | Subset `--target m8-9-failures` (anchored score 84) | qwen3-vl-plus | 20 | 6/20 (30%) | ⚠ scorer changed |
+| 4 | Full (anchored score 84) | qwen3-vl-plus | 155 | 121/155 (78%) | ⚠ scorer+pop+code all changed |
+| 5 | Full (anchored demoted to 68) | qwen3-vl-plus | 155 | 129/155 (83%) | ⚠ scorer+pop changed |
+| 6 | Full (after eval population-count fix) | qwen3-vl-plus | 171 | 140/171 (81.9%) | ⚠ scorer changed |
+| 7 | **M8.10 baseline (anchored OFF) — controlled** | **qwen3-vl-plus** | **171** | **143/171 (83.6%)** | ✅ control |
+| 8 | M8.10 published | qwen-vl-max | 167 | 147/167 (88%) | ✅ historical |
+
+### The one valid comparison (runs 6 vs 7: same scorer, same N, only anchor on/off)
+- **M8.10 selection (no anchored): 143/171**
+- **M8.11 (with anchored):        140/171**
+- **Net: −3. Anchored cropping is a REGRESSION.** Root cause: on most shared
+  exploded-view pages the anchor band's dominant drawing is still the larger
+  neighbor part, so the namer reads the neighbor. Text anchoring does not beat
+  geometry on the small-part-shares-page problem — the same wall M8.9/M8.10's
+  geometric crops hit. Across geometry (M8.9/M8.10) AND text anchors (M8.11),
+  three crop variants have now failed to break the residual; **88% is the
+  practical ceiling of the "select whole figure / crop sub-region" approach.**
+
+### Methodology post-mortem (the mistakes, recorded so they are not repeated)
+1. **Broke the single-variable rule.** The model swap (qwen-vl-max→qwen3-vl-plus)
+   was introduced mid-experiment, so runs 3–6 vary scorer AND population AND code
+   simultaneously. Their numbers (78/81/83%) are **not comparable to the 88%
+   baseline** and must not be cited as "the model made it worse". The apparent
+   88%→83.6% drop (run 8 vs 7) is almost entirely the **scorer getting stricter**
+   (qwen3-vl-plus answers e.g. "FRU (Field Replaceable Unit)" or "motherboard" vs
+   expected "system board" → token mismatch), not a real selection regression.
+2. **figure-match is the wrong metric for a model swap.** It measures which image
+   is *selected*; the reconstruction model only *reads* the selected image, so a
+   stronger model cannot move figure-match. This is why runs 3–7 show no model
+   benefit — by construction, not by failure of the model.
+3. **Burned API before an offline check.** The anchored regression was knowable
+   from an offline simulation (15 cases, 0 API); instead it was discovered after
+   full live runs. Future crop/selection changes must be offline-simulated first.
+
+### Governance decision (confirmed with user)
+- The figure-match scorer is **fixed at qwen-vl-max** going forward, to stay
+  comparable with the 88% history (AGENTS.md §5/§13: scorer-semantics changes
+  must be flagged beside before/after numbers — here we simply keep it fixed).
+- Anchored cropping is **abandoned and reverted** on main; preserved on
+  `m8.11-anchor-failure` for reproducibility.
+- The model-swap question is re-scoped to its only valid target: **reconstruction
+  step quality**, measured by a separate pairwise judge eval (M8.11-RQ, pending),
+  where a stronger generator can actually pay off and figure-match is untouched.
+
+Artifacts (all gitignored): `data/eval/m8_11_model_ab_residual.jsonl`,
+`m8_11_full_qwen3vlplus.jsonl`, `m8_11_full_demoted.jsonl`,
+`m8_11_full_final.jsonl`, `m8_10_equiv_qwen3vlplus.jsonl`. Scripts:
+`scripts/thinkpad_model_ab_residual.py`, `scripts/thinkpad_recon_quality_ab.py`.
+DASHSCOPE_API_KEY was exposed in chat again and MUST be rotated.

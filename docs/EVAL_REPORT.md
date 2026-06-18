@@ -1051,3 +1051,29 @@ Further milestone planning is intentionally deferred from this direction
 correction. If quality work continues before M9, it should focus on correct
 diagram evidence and image/resource delivery before VLM interpretation, while
 preserving the current scorer and unverified-vision governance.
+
+## M8.11 Text-Anchor Figure Cropping — Negative Result
+
+M8.11 attempted to break the 88% residual with text-anchor cropping
+(`region_crop_anchored`): crop the band under each `Removal steps of <component>`
+anchor and attribute it by name match. Controlled comparison (scorer fixed, same
+N=171, anchored on/off only):
+
+| Selection | Scorer | N | figure-match |
+|---|---|---|---|
+| M8.10 (anchored OFF) | qwen3-vl-plus | 171 | 143 (83.6%) |
+| M8.11 (anchored ON) | qwen3-vl-plus | 171 | 140 (81.9%) |
+| M8.10 published | qwen-vl-max | 167 | 147 (88%) |
+
+**Anchored cropping is net −3 — a regression — and was reverted** (preserved on
+branch `m8.11-anchor-failure`). Three crop variants (M8.9 wide, M8.10 precise,
+M8.11 anchored) have now failed the same small-part-shares-page residual; **88%
+is the practical ceiling of the select-figure / crop-subregion approach.**
+
+The 88%→83.6% gap between the two baselines (rows 3 vs 1) is the **scorer getting
+stricter** (qwen3-vl-plus is harsher: "motherboard"≠"system board", literal "FRU"
+answers), NOT a selection regression. Lesson recorded in EXPERIMENTS.md: a model
+swap mid-milestone broke single-variable control and produced several
+non-comparable runs; the figure-match scorer is now fixed at qwen-vl-max for
+comparability, and the model-swap question is re-scoped to reconstruction-step
+quality (which figure-match cannot measure).
