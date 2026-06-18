@@ -84,7 +84,7 @@ Do not rewrite the generic MCP server, vector store layer, dashboard, provider a
 
 The repository has completed M0-M8.10. The current M8.10 implementation baseline is `fix(thinkpad): improve figure crop precision for image-only procedures`.
 
-The project is at a decision point. M8.5-M8.10 changed the system's core procedure model: most HMM removal procedures in this corpus are diagram-first or image-only, so the system must not pretend it extracted authoritative textual steps from the PDF. M8.10 added precise crop candidates and primary-image diagnostics, but the final live result stayed at the M8.9 boundary: 147/167 (88%) full-live figure correctness with 0 spec leaks. The next step should be M8.11 residual visual ownership remediation, or M9 packaging only if the 88% figure-correctness boundary is explicitly accepted and documented.
+The project is at a decision point. M8.5-M8.10 changed the system's core procedure model: most HMM removal procedures in this corpus are diagram-first or image-only, so the system must not pretend it extracted authoritative textual steps from the PDF. The correct product direction is a diagram-first evidence copilot: return cited HMM diagrams, page/bbox metadata, structured screw/spec facts, dependency chains, and safety warnings first; show VLM text only as optional unverified interpretation after the diagram evidence. M8.10 added precise crop candidates and primary-image diagnostics, but the final live result stayed at the M8.9 boundary: 147/167 (88%) full-live diagram selection correctness with 0 spec leaks. That number is not a VLM repair-step quality score. Further milestone choices remain separate; this guide first corrects the direction and claims.
 
 Current milestone status:
 
@@ -140,6 +140,7 @@ Current quality boundary after M8.10:
 - `image_only` FRUs with no attributed image dropped from 31 to 8.
 - 20 residual final live mismatches remain, grouped as fine-grained component-name mismatch, neighbor large-assembly bleed, and neighbor battery/large-part bleed.
 - qwen-vl `vision_steps` are additive and unverified; they must not be presented as Lenovo-authored procedure text.
+- Current ThinkPad MCP tools return figure metadata through JSON `TextContent`, not user-visible image bytes. Direct MCP image display requires a future `ImageContent` or equivalent resource-return implementation.
 
 Canonical paths:
 
@@ -176,7 +177,7 @@ scripts/thinkpad_vision_live_eval.py
 scripts/thinkpad_prepare_crop_review.py
 ```
 
-Current MCP tools expose structured evidence. M8 adds a local Python/CLI repair-planning agent client but does not expose a `plan_repair` MCP tool. M8.6-M8.10 add a diagram-first FRU procedure path for image-only HMM procedures and optional qwen-vl `vision_steps`; these vision steps remain unverified assistive output, not authoritative manual text.
+Current MCP tools expose structured evidence. M8 adds a local Python/CLI repair-planning agent client but does not expose a `plan_repair` MCP tool. M8.6-M8.10 add a diagram-first FRU procedure path for image-only HMM procedures and optional qwen-vl `vision_steps`; these vision steps remain unverified assistive output, not authoritative manual text. Current ThinkPad MCP tools return diagram metadata only (`image_id`, page citation, bbox/crop metadata, `figure_kind`, `source_image_id`) rather than image bytes.
 
 ---
 
@@ -521,7 +522,7 @@ Domain reranking should prefer:
 | M7 | Graph RAG | FRU dependency graph and traversal tool |
 | M8 | Agent client | local tool-calling repair-planning workflow plus trajectory/faithfulness baseline |
 | M8.5-M8.10 | Diagram-first procedure correction | failed text-step gold premise, presentation typology, optional unverified qwen-vl reconstruction, y-position figure attribution, region-crop evidence, precise crop diagnostics, and M8.10 negative live result |
-| M8.11 or M9-risk-accepted | Decision gate | residual visual ownership remediation if quality remains the priority, or packaging only with the M8.10 88% figure boundary explicitly accepted |
+| Quality milestone or M9-risk-accepted | Decision gate | further quality work must focus on correct diagram evidence and image/resource delivery first; packaging only with the M8.10 88% figure boundary explicitly accepted |
 | M9 | Packaging/interview readiness | Docker/CI, final README, demo script, resume and interview notes after M8.10 risk is accepted or improved |
 
 Every milestone DoD also includes:
@@ -557,12 +558,13 @@ Current risks carried forward after M8.10:
 
 - M1/M3 extraction artifacts are structured candidates, not fully human-audited gold facts.
 - Figure and diagram records are now first-class procedure evidence for image-only FRUs, but exact specs must still come from text/table evidence.
+- Current MCP deployment does not make users directly see diagrams from ThinkPad tools; it returns metadata/citations. Future direct-image UX must implement MCP `ImageContent` or an equivalent resource link before docs or demos claim visible images.
 - Some M3-derived stress cases still expose component alias and procedure-applicability gaps.
 - M4/M6/M7/M8/M8.4 golden metrics are scoped to committed fixtures and do not represent every possible technician query.
 - M8.5 textual step gold is deprecated; do not use it as proof of step-level correctness.
 - M8.10 final full live figure correctness remains 147/167 (88%), not 100%; targeted region correctness remains 82/91 (90%); the old 20-failure target remains 0/20 fixed; 8 `image_only` FRUs with zero attributed images remain.
 - M8.10 proved that blindly promoting region crops as primary evidence is harmful: the experimental selector regressed to 135/167 (80%) and is disabled.
-- qwen-vl vision reconstruction is useful but unverified; it must not be presented as Lenovo-authored text or as the source for torque, screw counts, FRU IDs, or safety facts.
+- qwen-vl vision reconstruction is useful but unverified; it must not be presented as Lenovo-authored text, the main answer, or the source for torque, screw counts, FRU IDs, or safety facts.
 - Raw LLM-only and raw qwen-vl-only planning should not be exposed as the default; deterministic validation, cited diagrams, structured table evidence, and evidence fallback remain required for demo/user-facing behavior.
 - The local manifest and local index contain real operational metadata/artifacts, but committed examples must remain safe and copyright-light.
 
@@ -574,7 +576,7 @@ Engineering response:
 - use live provider tests when they reduce risk, but record provider fallback and failure rates honestly
 - keep LLM composition validation in place before exposing final repair planning through MCP
 - report contract, raw provider, recovered, strict citation, figure correctness, and verified-vs-unverified metrics separately
-- run M8.11 before M9 if the remaining visual-ownership risk is not explicitly accepted and documented
+- plan a separate quality milestone before M9 if the remaining visual-evidence risk is not explicitly accepted and documented
 
 ---
 

@@ -2176,6 +2176,10 @@ aid. It is NOT open-world step accuracy and must never be presented as
 authoritative. The DASHSCOPE key used here was exposed in chat and must be
 rotated.
 
+Product-direction note: the cited HMM diagram remains the primary user-facing
+evidence for image-only procedures. VLM text is auxiliary interpretation shown
+after the diagram, not the main answer.
+
 ## M8.7-002: Full-corpus live eval — reconstruction AND figure correctness
 
 Date: 2026-06-17
@@ -2187,6 +2191,9 @@ metric: render the figure that `get_fru_procedure` would return, ask qwen-vl to
 NAME the component it depicts, and check that name shares a content token with the
 queried FRU name. Command: `python scripts/thinkpad_vision_live_eval.py` (342
 qwen-vl calls: 1 reconstruction + 1 name-check per FRU).
+
+This qwen-vl name-check is an evaluator/diagnostic for diagram selection. It is
+not the user-facing response and must not be described as repair guidance.
 
 Results (171 FRUs, all 8 manuals):
 
@@ -2534,8 +2541,9 @@ python scripts\thinkpad_prepare_crop_review.py --extracted-dir data\extracted\m3
 
 Result: 27 metadata-only review cases were written under ignored `data/eval/`.
 
-Decision: human visual classification is needed before M8.11. The review pack is
-not a gold set and does not contain PDF images or manual text.
+Decision: human visual classification is useful before any further extraction
+changes. The review pack is not a gold set and does not contain PDF images or
+manual text.
 
 ## M8.10-003: Live Smoke
 
@@ -2576,6 +2584,8 @@ Result:
 
 Decision: failed experiment. Region promotion displaced stable native evidence.
 The selector was changed back to stable native-first behavior before final runs.
+This is a diagram-selection failure mode, not evidence that VLM-generated text
+should become primary.
 
 ## M8.10-005: Final Old M8.9 Failure Target
 
@@ -2639,7 +2649,9 @@ Result:
 | Name-check latency mean / p95 | 1.5 s / 1.8 s |
 
 Decision: final M8.10 preserves the M8.9 full-live boundary but does not improve
-it. M8.10 is not a pass for the planned `>=93%` crop-precision gate.
+it. M8.10 is not a pass for the planned `>=93%` crop-precision gate. The
+user-facing direction remains diagram-first evidence plus structured facts, with
+VLM interpretation optional and unverified.
 
 ## M8.10-008: Regression Tests And Lint
 

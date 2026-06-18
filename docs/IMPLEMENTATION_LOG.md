@@ -1867,7 +1867,7 @@ diagram selection as solved.
 | Modified | `tests/thinkpad/test_figure_extractor.py` | Covers wide vs precise region crops, continuation behavior, and pseudo-FRU skip. |
 | Modified | `tests/thinkpad/test_vision_steps.py` | Covers stable native-first selection, precise crop rendering, cache version, and no embedded-image clipping. |
 | Modified | `tests/thinkpad/test_models.py` | Covers `drawing_rects` serialization. |
-| Added | `docs/M8_10_CROP_PRECISION_REPORT.md` | Records implementation facts, live negative result, and M8.11 recommendation. |
+| Added | `docs/M8_10_CROP_PRECISION_REPORT.md` | Records implementation facts, live negative result, and the diagram-first direction boundary. |
 
 ### Extraction Results
 
@@ -1912,8 +1912,52 @@ committed.
 ### Handoff
 
 M8.10 did not justify M9 as a clean quality handoff. The next quality milestone
-should be M8.11 residual visual ownership remediation. It should start with human
-classification of `data/eval/m8_10_residual_crop_review.md` into wrong-neighbor,
-ambiguous, scorer false-negative, missing-crop, and ownership-bug buckets before
-making more extraction changes. If M9 starts instead, it must explicitly accept
-the 147/167 (88%) full-live figure-correctness boundary.
+was intentionally left for a separate plan after the direction correction. If
+quality work continues, it should focus on correct diagram evidence and
+image/resource delivery before VLM interpretation. If M9 starts instead, it must
+explicitly accept the 147/167 (88%) full-live figure-correctness boundary.
+
+---
+
+## M8.10 Direction Correction: Diagram-First Evidence, VLM Auxiliary Only
+
+- Date: 2026-06-18
+- User goal: correct the project narrative before planning further work. The
+  product direction is not "mainly return VLM-generated repair steps"; it is
+  diagram-first evidence with optional unverified VLM interpretation.
+- Scope included: documentation-only clarification of user-facing output order,
+  current MCP image behavior, target MCP image behavior, and M8.10 metric
+  interpretation.
+- Scope excluded: code changes, MCP `ImageContent` implementation, live tests,
+  M8.11 planning, local `data/` artifacts, provider output, API keys, and
+  committed images/PDFs.
+
+### Corrected Direction
+
+| Topic | Correct Current Interpretation |
+|---|---|
+| Image-only procedures | Primary evidence is cited HMM diagram/page/bbox plus structured facts. |
+| VLM steps | Optional auxiliary explanation, always `verified=false`, never Lenovo-authored text. |
+| M8.10 88% metric | Diagram selection correctness boundary, not VLM repair-step quality. |
+| qwen-vl name-check | Evaluator/diagnostic for whether the selected image matches the queried FRU. |
+| MCP image output today | ThinkPad tools return `TextContent(JSON)` metadata only, not image bytes. |
+| MCP image output target | Future `include_images=true` should add `ImageContent` or equivalent resource links. |
+
+### Documentation Changes
+
+| Path | Change |
+|---|---|
+| `AGENTS.md` | Added diagram-first user-facing direction, current metadata-only MCP behavior, future `ImageContent` target, and VLM auxiliary-order rule. |
+| `docs/PROJECT_GUIDE.md` | Clarified product positioning, current quality boundary, and MCP image-output limitation. |
+| `docs/DEV_SPEC_THINKPAD.md` | Added current vs target MCP image behavior and `include_images=true` semantics. |
+| `docs/EVAL_REPORT.md` | Reframed M8.7/M8.10 qwen-vl calls as auxiliary/evaluator roles, not product output. |
+| `docs/EXPERIMENTS.md` | Added notes distinguishing diagram-selection evaluation from VLM repair guidance. |
+| `docs/M8_10_CROP_PRECISION_REPORT.md` | Clarified that M8.10 evaluated diagram ownership and preserved diagram-first product direction. |
+
+### Handoff
+
+Before any further milestone, documentation and demo claims must say: users
+currently receive figure metadata/citations from MCP, not direct images. Direct
+image display requires a future MCP image-content implementation. Even after
+direct images exist, qwen-vl text remains auxiliary interpretation after the
+diagram, not the main repair source.

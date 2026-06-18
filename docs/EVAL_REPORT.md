@@ -853,6 +853,10 @@ authoritative path (figure + screw/torque table + steps_in_diagram) is unchanged
 vision steps live in a separate `vision_steps` field marked
 `verified:false` / `qwen_vl_unverified`.
 
+Product-direction note: for image-only procedures, the cited diagram is the
+primary evidence. qwen-vl reconstruction is an auxiliary explanation shown after
+the diagram, not the main answer and not Lenovo-authored procedure text.
+
 Bounded live smoke (`scripts/thinkpad_vision_live_smoke.py 10`, 10 real component
 image_only FRUs):
 
@@ -877,6 +881,9 @@ by asking qwen-vl to name the returned diagram's component):
 Regression with vision OFF (default): 120-case deterministic strict = 0 failures,
 all contract metrics 1.0. Vision is disabled by default so deterministic baselines
 are unaffected.
+
+The qwen-vl name-check in this eval is a diagnostic scorer for diagram
+selection. It should not be described as user-facing repair guidance.
 
 Honesty note: vision steps are PLAUSIBLE BUT UNVERIFIED — qwen-vl interprets the
 drawing and some details may be wrong. This is NOT open-world step accuracy; it is
@@ -997,9 +1004,10 @@ figure-correctness boundary explicitly accepted.
 
 Date: 2026-06-18
 
-M8.10 attempted to improve the M8.9 residual figure-correctness failures by
+M8.10 attempted to improve the M8.9 residual diagram-selection failures by
 adding x/y drawing-rect crop candidates and primary-image diagnostics. It did
-not meet the planned `>=93%` gate.
+not meet the planned `>=93%` gate. The metric is figure/diagram correctness, not
+VLM-generated step quality.
 
 ### Extraction And Coverage
 
@@ -1017,7 +1025,9 @@ M8.10 preserved M8.9 image coverage but did not improve it.
 
 ### Live Evaluation
 
-The qwen-vl figure name-check scorer is unchanged from M8.8/M8.9.
+The qwen-vl figure name-check scorer is unchanged from M8.8/M8.9. It is an
+evaluator/diagnostic that names the selected image; it is not the product's main
+answer.
 
 | Run | Population | Correct | Rate | Non-empty | Spec leaks | Interpretation |
 |---|---:|---:|---:|---:|---:|---|
@@ -1031,11 +1041,13 @@ The qwen-vl figure name-check scorer is unchanged from M8.8/M8.9.
 
 M8.10 is a useful negative result, not a successful quality gate. Blindly
 promoting region crops as primary evidence reduces correctness. The default
-behavior remains native-first with region crops as additional evidence. Do not
-enter M9 as a clean quality pass unless the 147/167 (88%) full-live
-figure-correctness boundary is explicitly accepted.
+behavior remains native-first with region crops as additional evidence. The
+user-facing answer should remain diagram-first evidence plus structured facts,
+with qwen-vl text only as optional unverified interpretation. Do not enter M9 as
+a clean quality pass unless the 147/167 (88%) full-live figure-correctness
+boundary is explicitly accepted.
 
-Recommended next milestone: M8.11 residual visual ownership remediation using
-the M8.10 residual crop review pack to classify wrong-neighbor crops, ambiguous
-shared drawings, scorer false negatives, and missing crop cases before making
-more extraction changes.
+Further milestone planning is intentionally deferred from this direction
+correction. If quality work continues before M9, it should focus on correct
+diagram evidence and image/resource delivery before VLM interpretation, while
+preserving the current scorer and unverified-vision governance.

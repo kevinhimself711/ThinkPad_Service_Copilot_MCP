@@ -209,6 +209,9 @@ Figure evidence contract after M8.10:
 - `source_image_id` links a crop back to its page raster source.
 - Exact specs still come from structured text/table evidence, not from diagrams
   or vision reconstruction.
+- User-facing image-only answers must be diagram-first: the cited figure/page
+  evidence is primary, and qwen-vl `vision_steps` are optional unverified
+  interpretation after the figure evidence.
 
 M3 CLI:
 
@@ -445,9 +448,29 @@ Behavior rules:
 - Procedure, screw, diagram, and safety tools require a model string.
 - Ambiguous high-risk model text returns `status=clarification_required`.
 - `lookup_error_code` can run without a model filter, but applies the filter if provided.
-- `get_related_diagram` returns metadata and citations only; M5 does not return image bytes.
+- Current `get_related_diagram` and `get_fru_procedure` return figure metadata and citations only. They are wrapped as MCP `TextContent(JSON)`, not `ImageContent`.
+- `include_images=true` currently does not return image bytes. Responses must continue to expose `metadata.image_bytes_returned=false` until the handler actually emits image content.
 - Missing local extraction artifacts produce empty structured lookup results rather than server startup failure.
 - MCP handler errors must not expose Python tracebacks to clients.
+
+Current MCP image behavior:
+
+- Figure records expose `image_id`, `manual_id`, page citation, `bbox`,
+  `figure_kind`, `source_image_id`, and optional `storage_uri`.
+- Users of the deployed ThinkPad MCP tools see this metadata unless their client
+  or a separate UI renders the local PDF/page/bbox itself.
+- Do not claim MCP users can directly see diagrams from ThinkPad tools until
+  image bytes or resource links are implemented.
+
+Target MCP image behavior:
+
+- Future `include_images=true` should return the same JSON evidence plus MCP
+  `ImageContent` or an equivalent image resource.
+- `region_crop` and `region_crop_precise` should be rendered at request time from
+  the local PDF using the page and bbox; image files should not be committed or
+  persisted as tracked artifacts.
+- Clients without image rendering support should gracefully fall back to
+  metadata, page, and bbox citations.
 
 ## 15. M5 Handoff To M6
 

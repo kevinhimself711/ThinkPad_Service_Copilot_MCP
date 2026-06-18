@@ -6,16 +6,19 @@ Date: 2026-06-18
 
 M8.10 implemented figure-selection diagnostics and an additional precise crop
 candidate path, but it did **not** improve live figure correctness over M8.9.
+This report evaluates diagram selection, not the quality of VLM-generated repair
+steps.
 
 Final decision:
 
 - Keep the safe M8.9-style primary behavior: native `embedded_image` /
   `page_raster` evidence remains first; `region_crop` and
   `region_crop_precise` are retained as additional diagnostic/recovery evidence.
+- Keep the product direction diagram-first: cited HMM figure/page evidence and
+  structured facts are primary; qwen-vl text is optional auxiliary explanation.
 - Do not claim M8.10 met the planned `>=93%` gate.
-- Do not enter M9 as a clean quality pass. Either accept the M8.9/M8.10 88%
-  full-live figure boundary explicitly, or run M8.11 focused on residual visual
-  ownership.
+- Do not enter M9 as a clean quality pass unless the M8.9/M8.10 88% full-live
+  figure boundary is explicitly accepted.
 
 ## Implementation Facts
 
@@ -61,7 +64,9 @@ M8.10 preserved M8.9 image coverage, but did not improve coverage.
 ## Live Evaluation
 
 All live runs used the same qwen-vl name-check scorer as M8.8/M8.9. The scorer
-was not relaxed.
+was not relaxed. This qwen-vl call is an evaluator/diagnostic that asks whether
+the selected image appears to match the queried FRU; it is not the user-facing
+answer.
 
 | Run | Population | Correct | Rate | Non-empty | Spec leaks | Interpretation |
 |---|---:|---:|---:|---:|---:|---|
@@ -74,7 +79,8 @@ was not relaxed.
 
 M8.10 did not meet the planned `>=93%` figure-correctness gate. The failed
 selector attempt is important evidence: naively promoting region crops as primary
-evidence makes the result worse, not better.
+evidence makes the result worse, not better. This is a diagram ownership problem,
+not evidence that VLM-generated steps should become the primary answer.
 
 ## Root Cause
 
@@ -95,6 +101,9 @@ Observed residual pattern:
 - The bottleneck remains evidence selection / visual ownership, not qwen-vl
   reconstruction or spec leakage. Final M8.10 still has 100% non-empty
   reconstructions and 0 spec leaks.
+- qwen-vl reconstruction remains a secondary explanation layer for a cited
+  diagram. It must not replace the diagram, structured screw/spec rows,
+  dependency chain, or safety warnings in the user-facing answer.
 
 ## Regression
 
@@ -112,16 +121,11 @@ quality gate. It preserves the M8.9 boundary and adds the artifacts needed to
 debug the residual mismatch set, but it does not justify M9 as a clean quality
 handoff.
 
-Recommended next step: M8.11 residual visual ownership remediation.
-
-M8.11 should not relax the live scorer. It should use human visual review of the
-27-case residual crop pack to classify whether each failure is:
-
-- wrong neighbor crop;
-- correct crop but qwen-vl name-check false negative;
-- ambiguous shared drawing;
-- missing required crop;
-- or extraction/ownership bug.
+Further milestone planning is intentionally deferred from this direction
+correction. If another quality milestone is chosen before M9, its direction
+should be to make the user see or receive the correct diagram evidence first,
+then optionally show unverified VLM interpretation after it. It should not relax
+the live scorer, spec-leak guard, or unverified-vision governance.
 
 Only after that classification should the code change, likely by adding
 figure-number / callout proximity or a small human-reviewed residual fixture

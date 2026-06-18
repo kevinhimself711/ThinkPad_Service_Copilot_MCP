@@ -79,7 +79,7 @@ Current baseline:
 - Active branch: `thinkpad-hmm-domain`
 - M8.10 implementation baseline: `fix(thinkpad): improve figure crop precision for image-only procedures`
 - Completed milestones: M0 through M8.10
-- Current next milestone: M8.11 residual visual ownership remediation or M9 packaging with explicit M8.10 risk acceptance
+- Current next milestone decision is deferred. Future quality work must focus on correct, user-visible diagram evidence before VLM interpretation; M9 packaging is only appropriate if the M8.10 88% diagram-selection boundary is explicitly accepted.
 
 Current capability status:
 
@@ -108,9 +108,16 @@ M8.10 results define the current quality boundary:
 - M8.10 experimental selector full run: 166/167 reconstructed, 0 spec leaks, figure correctness 135/167 (80%); this behavior is not the default.
 - `image_only` FRUs with no attributed image dropped from 31 to 8, but 20 final live figure mismatches remain.
 
-Do not describe these results as universal open-world repair accuracy. They prove a bounded diagram-first evidence path and a measured improvement in figure attribution. Raw LLM-only or raw vision-only repair planning is not the default demo path. The default user-facing behavior should remain deterministic validation, cited evidence, and explicit unverified labeling for vision-derived steps.
+Do not describe these results as universal open-world repair accuracy. They prove a bounded diagram-first evidence path and a measured improvement in figure attribution. Raw LLM-only or raw vision-only repair planning is not the default demo path.
 
-M9 packaging can proceed only if it explicitly accepts and documents M8.10's 88% full-live figure-correctness boundary. If the goal is to improve quality before packaging, the next milestone should be M8.11 residual visual ownership remediation.
+Current user-facing direction:
+
+- The primary answer for `image_only` and `cross_ref` procedures is cited official HMM diagram evidence plus structured facts: manual/page, image id, bbox/crop metadata, FRU dependency chain, screw/spec rows, and safety warnings.
+- `vision_steps` are optional auxiliary interpretation of the cited diagram. They must appear after the diagram evidence, remain `verified=false`, and must not be presented as Lenovo-authored or authoritative repair steps.
+- M8.10's 147/167 (88%) metric is a diagram selection correctness boundary. It is not a VLM-generated repair-step quality score.
+- Current ThinkPad MCP tools return JSON metadata through `TextContent`; they do not directly return image bytes to the user yet. `include_images=true` is a future target behavior, not a completed capability.
+
+M9 packaging can proceed only if it explicitly accepts and documents M8.10's 88% full-live figure-correctness boundary. If the goal is to improve quality before packaging, plan that milestone separately around correct diagram evidence and direct image/resource delivery, not VLM text as the primary answer.
 
 ---
 
@@ -577,6 +584,14 @@ Must prefer structured table records.
 ### `get_related_diagram`
 
 Returns diagram records and image references for a component/FRU under a model.
+Current behavior is metadata-only: JSON includes `image_id`, `manual_id`, page
+citation, `bbox`, `figure_kind`, `source_image_id`, and optional `storage_uri`;
+the MCP response does not include image bytes or `ImageContent`.
+
+Future target behavior: when `include_images=true`, return the same JSON
+evidence plus MCP `ImageContent` rendered from the local PDF/page/bbox at runtime.
+Do not claim this is implemented until the MCP handler actually returns image
+content.
 
 Must not claim image-derived torque/specs unless verified by text/table.
 
@@ -773,6 +788,8 @@ Evaluation interpretation rules after M8.10:
 - Treat the M8.4 human gold fixture as a useful manually reviewed gate, but not as proof of step-level procedure correctness for image-only HMM procedures.
 - Treat M8.5 textual step-gold as deprecated because the human review invalidated its premise.
 - For `image_only` and `cross_ref` FRU procedures, evaluate correct cited diagram/figure evidence, absence of fabricated text steps, structured screw/spec table grounding, and explicit unverified labeling of optional vision steps.
+- Treat qwen-vl name-check as an evaluator/diagnostic for whether the selected diagram matches the queried FRU. Do not describe it as the user-facing answer.
+- Treat qwen-vl reconstruction as auxiliary explanation only. The user-facing order is diagram evidence first, structured facts second, VLM interpretation last.
 - Report qwen-vl reconstruction and figure correctness separately. M8.10 measured 147/167 (88%) figure correctness on the final full live run and 82/91 (90%) on region-linked targets, with 0 spec leaks. This is the current live figure-attribution boundary, not a perfect result.
 - Preserve the M8.10 negative result: blindly promoting region crops as primary evidence regressed to 135/167 (80%), so stable native-first evidence remains the default.
 - Do not collapse recovered user-visible success and raw provider/LLM quality into one headline metric.
@@ -787,7 +804,7 @@ The MCP evidence layer, graph tool, and local agent client now exist. Future wor
 1. Keep deterministic evidence tools as the source of truth.
 2. Keep `get_fru_dependency_chain` as graph evidence, not a buzzword feature.
 3. Use the local repair-planning agent for demos with deterministic validation and evidence fallback.
-4. Treat M8.10 crop precision remediation as complete but not successful: it preserved the M8.9 88% boundary and added diagnostics, but did not improve the old residual failures. Choose M8.11 residual visual ownership remediation if quality is still the priority, or enter M9 only with the 88% full-live figure boundary explicitly documented.
+4. Treat M8.10 crop precision remediation as complete but not successful: it preserved the M8.9 88% boundary and added diagnostics, but did not improve the old residual failures. Any next quality milestone should improve correct diagram evidence and image delivery before VLM interpretation; M9 can proceed only with the 88% full-live figure boundary explicitly documented.
 
 ### Agent workflow
 
@@ -958,7 +975,7 @@ LLM calls must not be used as the sole source of truth for:
 
 For exact facts, prefer structured table records and cited HMM text.
 
-After M8.8, raw live LLM/vision output must still be treated as assistive rather than authoritative. Do not make raw LLM-only or raw qwen-vl-only planning the default demo or MCP behavior. LLM composition may rewrite cited evidence into a repair plan only after deterministic evidence validation, and fallback behavior must remain visible in metrics. qwen-vl `vision_steps` may describe what the cited diagram appears to show, but must remain `verified=false` and must not supply exact specs, torque values, screw counts, FRU IDs, or safety facts.
+After M8.8, raw live LLM/vision output must still be treated as assistive rather than authoritative. Do not make raw LLM-only or raw qwen-vl-only planning the default demo or MCP behavior. LLM composition may rewrite cited evidence into a repair plan only after deterministic evidence validation, and fallback behavior must remain visible in metrics. qwen-vl `vision_steps` may describe what the cited diagram appears to show, but must remain `verified=false`, appear after cited diagram evidence, and must not supply exact specs, torque values, screw counts, FRU IDs, or safety facts.
 
 When LLM output is parsed into structured data:
 
@@ -1037,15 +1054,15 @@ Use this roadmap unless the user gives a different one.
 - M8.9: added region-crop figure evidence and clipped rendering for image-only procedures; image coverage improved from 163/194 to 186/194, final full live figure correctness is 147/167 (88%), targeted region correctness is 82/91 (90%), and spec leaks remain 0.
 - M8.10: added drawing-rect precise crop candidates, primary-image diagnostics, and a residual crop review pack; the experimental selector regressed to 135/167 (80%) and was disabled, so final stable full live remains 147/167 (88%) with 0 spec leaks.
 
-### Current next phase: M8.11 Residual Visual Ownership Remediation or M9 With Explicit Risk Acceptance
+### Current next phase: Direction Corrected; Milestone Decision Deferred
 
-- If choosing M8.11, first classify the M8.10 residual crop review pack into wrong-neighbor crop, ambiguous shared drawing, scorer false-negative, missing crop, and extraction/ownership bug buckets.
-- M8.11 should improve visual ownership evidence, not relax the qwen-vl name-check scorer, spec-leak guard, or unverified-vision governance.
+- Do not make VLM-generated text the primary product path. The next quality milestone, if chosen, should make users receive or view the correct cited diagram evidence first.
+- Do not relax the qwen-vl name-check scorer, spec-leak guard, or unverified-vision governance to manufacture a better metric.
 - If choosing M9 instead, record that packaging proceeds with the M8.10 risk accepted: final full live figure correctness is 147/167 (88%), targeted region correctness is 82/91 (90%), old-failure target is 0/20, and 8 image-only FRUs still have no attributed image.
 
 ### Following phase: M9 Packaging And Interview Readiness
 
-- Add Docker and CI after M8.11 improves the residual visual-ownership gap, or after M8.10's residual risk is explicitly accepted.
+- Add Docker and CI after a separate quality milestone improves the residual visual-evidence gap, or after M8.10's residual risk is explicitly accepted.
 - Write final README and demo script.
 - Write resume bullets and interview notes.
 - Clean up docs so claims match M8.10 evidence.
@@ -1101,6 +1118,7 @@ M9 demo claims must also include the evaluation boundary:
 - M8.8 live figure correctness is 133/148 (89%) with 0 spec leaks, not 100%,
 - M8.10 final full live figure correctness remains 147/167 (88%) with 0 spec leaks; image-only coverage is 186/194 and the >93% target was not met,
 - qwen-vl vision steps are additive and unverified,
+- current MCP ThinkPad tools return figure metadata only, not user-visible image bytes,
 - generated repair plans are evidence-grounded and validated rather than raw LLM-only.
 
 ---
