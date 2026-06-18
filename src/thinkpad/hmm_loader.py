@@ -13,6 +13,14 @@ from src.thinkpad.models import HMMPage
 # fru_extractor's heading shape; used to capture the heading's within-page y.
 _FRU_HEADING_LINE_RE = re.compile(r"^\s*(?P<fru_id>[1-9]\d{3})\s+[A-Za-z][^\n]{2,80}$")
 
+# Matches a removal-procedure anchor ("Removal steps of the coin-cell battery",
+# "Removal procedure for wireless WAN card"). The captured component names the
+# FRU that owns the drawing below it, even on a page shared by several FRUs (M8.11).
+_REMOVAL_ANCHOR_RE = re.compile(
+    r"^\s*removal\s+(?:steps\s+of|procedure\s+for)\s+(?:the\s+)?(?P<component>.+?)\s*$",
+    re.IGNORECASE,
+)
+
 
 class HMMExtractionError(RuntimeError):
     """Raised when local HMM extraction cannot safely proceed."""
@@ -58,6 +66,7 @@ def load_hmm_pages(
             drawing_rects = _page_drawing_rects(page)
             drawing_bands = [(y0, y1) for _, y0, _, y1 in drawing_rects]
             image_bboxes = _page_image_bboxes(page, image_xrefs)
+            removal_anchors = _page_removal_anchors(page)
 
             table_blocks: list[list[list[str]]] = []
             if hasattr(page, "find_tables") and _should_probe_tables(page_text):
@@ -87,6 +96,7 @@ def load_hmm_pages(
                     drawing_bands=drawing_bands,
                     drawing_rects=drawing_rects,
                     image_bboxes=image_bboxes,
+                    removal_anchors=removal_anchors,
                 )
             )
         return pages
@@ -116,6 +126,35 @@ def _page_fru_headings(page: object) -> list[tuple[float, str]]:
             headings.append((y0, match.group("fru_id")))
     headings.sort(key=lambda item: item[0])
     return headings
+
+
+def _page_removal_anchors(page: object) -> list[tuple[float, str]]:
+    """Return (y0, component_text) for "Removal steps of <component>" anchors on
+    the page, top-to-bottom. The component text names the FRU whose drawing sits
+    below the anchor; used to attribute a shared exploded-view page to the right
+    FRU even when geometry alone would pick the larger neighbor (M8.11)."""
+
+    anchors: list[tuple[float, str]] = []
+    try:
+        blocks = page.get_text("dict").get("blocks", [])  # type: ignore[attr-defined]
+    except Exception:
+        return anchors
+    for block in blocks:
+        if block.get("type") != 0:
+            continue
+        text = " ".join(
+            span.get("text", "")
+            for line in block.get("lines", [])
+            for span in line.get("spans", [])
+        ).strip()
+        match = _REMOVAL_ANCHOR_RE.match(text)
+        if match:
+            component = match.group("component").strip()
+            if component:
+                y0 = float(block.get("bbox", [0, 0, 0, 0])[1])
+                anchors.append((y0, component))
+    anchors.sort(key=lambda item: item[0])
+    return anchors
 
 
 def _page_drawing_rects(page: object) -> list[tuple[float, float, float, float]]:

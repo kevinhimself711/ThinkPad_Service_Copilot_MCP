@@ -36,6 +36,7 @@ _FIGURE_KINDS = frozenset(
         "page_raster",
         "region_crop",
         "region_crop_precise",
+        "region_crop_anchored",
         "unknown",
     }
 )
@@ -79,6 +80,10 @@ class HMMPage:
     # Embedded-image bounding boxes aligned with image_xrefs order (x0,y0,x1,y1),
     # so a figure's within-page y can be compared to FRU heading bands.
     image_bboxes: list[tuple[float, float, float, float]] = field(default_factory=list)
+    # Within-page "Removal steps of <component>" anchors as (y0, component_text),
+    # top-to-bottom (M8.11). Names the FRU that actually owns the drawing below
+    # the anchor, disambiguating small parts that share an exploded-view page.
+    removal_anchors: list[tuple[float, str]] = field(default_factory=list)
 
     def __post_init__(self) -> None:
         _require_non_empty(self.manual_id, "manual_id")

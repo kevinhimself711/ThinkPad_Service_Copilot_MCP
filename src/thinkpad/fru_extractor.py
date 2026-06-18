@@ -333,7 +333,73 @@ def _build_region_crop_figures(
                     storage_uri=None,
                 )
             )
+        regions.extend(
+            _anchored_region_crops(page, page_number, source, procs_by_fru)
+        )
     return regions
+
+
+def _anchored_region_crops(
+    page: HMMPage,
+    page_number: int,
+    source: FigureRecord,
+    procs_by_fru: dict[str, list[FRUProcedure]],
+) -> list[FigureRecord]:
+    """Emit `region_crop_anchored` figures: crop bands keyed by a removal anchor
+    and attributed to the FRU whose name the anchor's component matches (M8.11)."""
+
+    crops: list[FigureRecord] = []
+    for component, bbox in _anchored_region_bboxes_for_page(page):
+        owner = _owner_for_anchor_component(component, page_number, procs_by_fru)
+        if owner is None or _is_diagnostic_pseudo_fru(owner):
+            continue
+        region_id = f"{source.image_id}_region_anchored_{owner.fru_id}"
+        if any(existing.image_id == region_id for existing in crops):
+            continue
+        crops.append(
+            replace(
+                source,
+                image_id=region_id,
+                caption=f"Anchored region crop for FRU {owner.fru_id} removal diagram",
+                related_fru_id=owner.fru_id,
+                related_component=owner.fru_name,
+                bbox=bbox,
+                figure_kind="region_crop_anchored",
+                source_image_id=source.image_id,
+                storage_uri=None,
+            )
+        )
+    return crops
+
+
+def _owner_for_anchor_component(
+    component: str,
+    page_number: int,
+    procs_by_fru: dict[str, list[FRUProcedure]],
+) -> FRUProcedure | None:
+    """Find the FRU procedure whose name matches a removal anchor's component.
+
+    Prefers a procedure whose page span contains the anchor's page; among matches
+    picks the narrowest span (variant disambiguation), mirroring `_procedure_for_fru`.
+    """
+
+    matches = [
+        proc
+        for procs in procs_by_fru.values()
+        for proc in procs
+        if _anchor_matches_fru(component, proc.fru_name)
+    ]
+    if not matches:
+        return None
+    containing = [
+        proc
+        for proc in matches
+        if proc.page_start is not None
+        and proc.page_end is not None
+        and proc.page_start <= page_number <= proc.page_end
+    ]
+    pool = containing or matches
+    return min(pool, key=_span_width)
 
 
 def _is_diagnostic_pseudo_fru(proc: FRUProcedure) -> bool:
@@ -576,6 +642,67 @@ def _padded_bbox(
     )
 
 
+_ANCHOR_STOPWORDS = frozenset(
+    {"the", "a", "an", "and", "of", "with", "for", "assembly", "module", "selected",
+     "models", "only", "gen", "its"}
+)
+
+
+def _component_tokens(name: str) -> frozenset[str]:
+    """Content tokens of a component/FRU name for anchor<->FRU matching.
+
+    Drops parentheticals, "Gen N", and generic nouns so that "coin-cell battery"
+    matches the FRU "Coin-cell battery" but is not swamped by words like
+    "assembly" that nearly every FRU name carries.
+    """
+
+    lowered = re.sub(r"\(.*?\)", " ", name.lower())
+    lowered = re.sub(r"\bgen\s*\d+\b", " ", lowered)
+    lowered = lowered.replace("/", " ")
+    return frozenset(
+        token
+        for token in re.findall(r"[a-z0-9.]+", lowered)
+        if token not in _ANCHOR_STOPWORDS and len(token) > 1
+    )
+
+
+def _anchor_matches_fru(anchor_component: str, fru_name: str) -> bool:
+    """True when a removal anchor's component names this FRU (token overlap)."""
+
+    anchor_tokens = _component_tokens(anchor_component)
+    fru_tokens = _component_tokens(fru_name)
+    return bool(anchor_tokens and fru_tokens and (anchor_tokens & fru_tokens))
+
+
+def _anchored_region_bboxes_for_page(
+    page: HMMPage,
+) -> list[tuple[str, tuple[float, float, float, float]]]:
+    """Crop bands keyed by "Removal steps of <component>" anchors (M8.11).
+
+    Each anchor sits at the top of the diagram for the FRU it names, so the band
+    [anchor_y, next_anchor_y) isolates that FRU's exploded view even when a larger
+    neighbor on the same page would dominate a heading- or area-based band. Returns
+    (component_text, padded_bbox); attribution to a concrete FRU is done by the
+    caller via name match. None when the page lacks anchors or drawing rects.
+    """
+
+    if not page.width or not page.height or not page.removal_anchors or not page.drawing_rects:
+        return []
+    height = float(page.height)
+    width = float(page.width)
+    anchors = page.removal_anchors  # sorted (y0, component)
+    boundaries = [float(y) for y, _ in anchors] + [height]
+
+    results: list[tuple[str, tuple[float, float, float, float]]] = []
+    for index, (anchor_y, component) in enumerate(anchors):
+        lo = max(0.0, float(anchor_y))
+        hi = min(height, boundaries[index + 1])
+        bbox = _drawing_bbox_overlap(page, lo, hi)
+        if bbox is not None:
+            results.append((component, _padded_bbox(bbox[0], bbox[1], bbox[2], bbox[3], width, height)))
+    return results
+
+
 def _resolve_owner(
     figure: FigureRecord,
     spans: list[tuple[FRUProcedure, int, int]],
@@ -583,7 +710,7 @@ def _resolve_owner(
     procs_by_fru: dict[str, list[FRUProcedure]],
     ordered_starts: list[tuple[int, FRUProcedure]],
 ) -> FRUProcedure | None:
-    if figure.figure_kind in {"region_crop", "region_crop_precise"} and figure.related_fru_id:
+    if figure.figure_kind in {"region_crop", "region_crop_precise", "region_crop_anchored"} and figure.related_fru_id:
         return _procedure_for_fru(figure.related_fru_id, figure.page, procs_by_fru)
     page = page_info.get(figure.page)
     # No positional data -> legacy page-span containment.

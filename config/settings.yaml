@@ -38,7 +38,7 @@ embedding:
 vision_llm:
   enabled: false  # Default off: deterministic baselines run without vision. Enable for live vision runs.
   provider: "dashscope"  # Options: dashscope (qwen-vl), openai, azure
-  model: "qwen-vl-max"  # DashScope vision model
+  model: "qwen3-vl-plus"  # DashScope vision model (M8.11: upgraded from qwen-vl-max/Qwen2.5-VL; A/B showed 6%->33% on residual figures)
   base_url: "https://dashscope.aliyuncs.com/compatible-mode/v1"
   api_key: ""  # Leave empty; key is read from DASHSCOPE_API_KEY env var. Never commit a real key.
   # Azure-compatible settings (only used when provider is azure):

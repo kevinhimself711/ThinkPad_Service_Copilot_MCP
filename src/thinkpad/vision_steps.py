@@ -79,7 +79,7 @@ def render_procedure_images(
             page_number = int(figure["page"])
             if page_number < 1 or page_number > doc.page_count:
                 continue
-            should_clip = figure.get("figure_kind") in {"region_crop", "region_crop_precise"}
+            should_clip = figure.get("figure_kind") in {"region_crop", "region_crop_precise", "region_crop_anchored"}
             bbox = figure.get("bbox") if should_clip and isinstance(figure.get("bbox"), (list, tuple)) else None
             clip = None
             if bbox and len(bbox) == 4:
@@ -160,6 +160,7 @@ def _figure_score(
     kind = figure.get("figure_kind") or "unknown"
     score = {
         "embedded_image": 90,
+        "region_crop_anchored": 84,
         "page_raster": 70,
         "region_crop": 65,
         "region_crop_precise": 55,
@@ -192,7 +193,7 @@ def _same_fru(procedure: dict[str, Any], figure: dict[str, Any]) -> bool:
 
 
 def _is_region_crop(figure: dict[str, Any]) -> bool:
-    return figure.get("figure_kind") in {"region_crop", "region_crop_precise"}
+    return figure.get("figure_kind") in {"region_crop", "region_crop_precise", "region_crop_anchored"}
 
 
 def _is_precision_component(procedure: dict[str, Any]) -> bool:
